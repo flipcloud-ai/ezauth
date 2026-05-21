@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security Issue / 安全漏洞
+    url: https://github.com/flipcloud-ai/ezauth/security/advisories/new
+    about: Please report security vulnerabilities via Security Advisory, not as a public issue. / 请通过 Security Advisory 报告安全漏洞，不要创建公开 issue。
