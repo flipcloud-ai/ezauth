@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 220" fill="none">
+  <title>ezauth</title>
+  <path d="M100 8 L186 44 L186 112 C186 160 148 196 100 220 C52 196 14 160 14 112 L14 44 Z"
+        fill="#1E3448"/>
+  <line x1="122" y1="96" x2="80"  y2="140" stroke="#C8E9F4" stroke-width="26" stroke-linecap="round"/>
+  <line x1="80"  y1="140" x2="122" y2="140" stroke="#C8E9F4" stroke-width="26" stroke-linecap="round"/>
+  <circle cx="83" cy="95" r="15" fill="#D4AF78"/>
+</svg>

@@ -1,0 +1,421 @@
+{{define "admin/policies.html"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{if and .AppName (not .HideAppName)}}{{.AppName}} — {{end}}Admin — Policies</title>
+  <link rel="icon" type="image/svg+xml" href="{{.LogoURL}}">
+  <script src="{{.StaticPrefix}}/vendor/vue.global.prod.js"></script>
+  <link rel="stylesheet" href="{{.StaticPrefix}}/vendor/element-plus.css" />
+  <script src="{{.StaticPrefix}}/vendor/element-plus.full.min.js"></script>
+  <link rel="stylesheet" href="{{.StaticPrefix}}/css/all.min.css" />
+  <link rel="stylesheet" href="{{.StaticPrefix}}/css/portal.css">
+  <script>const AUTH_PREFIX = "{{.AuthPrefix}}"; const CSRF_TOKEN = "{{.CSRFToken}}"; const PORTAL_USER = "{{.Username}}"; const PORTAL_INITIALS = "{{.UserInitials}}"; const PORTAL_DB_ENABLED = {{.DBEnabled}};</script>
+  <script src="{{.StaticPrefix}}/scripts/portal.js"></script>
+  <style>
+    .perm-tag { cursor:pointer; transition:opacity 0.15s; }
+    .perm-tag:hover { opacity:0.75; }
+    .perm-kv { display:grid; grid-template-columns:120px 1fr; gap:0.5rem 0.75rem; }
+    .perm-kv-label { font-size:0.75rem; color:var(--text-secondary); font-weight:500; padding-top:1px; }
+    .perm-kv-value { font-size:0.875rem; color:var(--text-primary); word-break:break-all; }
+    .effect-allow { color:#67c23a; font-weight:600; }
+    .effect-deny  { color:#f56c6c; font-weight:600; }
+  </style>
+</head>
+<body>
+<div class="layout">
+  {{template "admin/nav.html" .}}
+  <div id="app" class="main-area"></div>
+</div>
+
+<script type="text/x-template" id="policies-tpl">
+  <header class="top-header">
+    <div class="breadcrumb">
+      <span>Admin</span>
+      <i class="fa fa-chevron-right"></i>
+      <span>Access</span>
+      <i class="fa fa-chevron-right"></i>
+      <span class="crumb-active">Policies</span>
+    </div>
+    <div class="header-right" style="position:relative;">
+      <div class="header-username" v-text="portalUser"></div>
+      <div class="header-avatar" @click.stop="toggleProfile" v-text="portalInitials"></div>
+      <div v-if="showProfile" class="profile-popover" @click.stop>
+        <div class="profile-popover-user">
+          <div class="profile-popover-avatar" v-text="portalInitials"></div>
+          <div class="profile-popover-info">
+            <div class="profile-popover-name" v-text="portalUser || '—'"></div>
+          </div>
+        </div>
+        <div class="profile-popover-actions">
+          <a :href="authPrefix + '/portal/profile'" class="profile-popover-action">
+            <i class="fa fa-user"></i> My Profile
+          </a>
+          <a v-if="dbEnabled" :href="authPrefix + '/portal/tokens'" class="profile-popover-action">
+            <i class="fa fa-key"></i> Access Tokens
+          </a>
+          <a :href="authPrefix + '/logout'" class="profile-popover-action danger">
+            <i class="fa fa-right-from-bracket"></i> Sign out
+          </a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="page-content">
+    <div class="page-header-row">
+      <div class="page-heading">
+        <h1>Policies</h1>
+        <p>Manage policies and their permission assignments.</p>
+      </div>
+      <el-button class="btn-primary" @click="openAddDialog">
+        <i class="fa fa-plus" style="margin-right:6px;"></i>Add Policy
+      </el-button>
+    </div>
+
+    <div class="filter-row">
+      <el-input v-model="searchQuery" placeholder="Search policies" clearable
+        @input="applyFilters" style="width:240px;" />
+      <el-button circle @click="fetchPolicies" :loading="loading">
+        <i class="fa fa-rotate-right"></i>
+      </el-button>
+    </div>
+
+    <div class="section-card" v-loading="loading">
+      <el-table :data="pagedPolicies" style="width:100%;cursor:pointer;"
+        @row-click="openDetailDrawer">
+        <el-table-column prop="name" label="Policy Name" min-width="200" />
+        <el-table-column label="Permissions" min-width="200">
+          <template #default="scope">
+            <span style="font-size:0.82rem;color:var(--text-secondary);" v-text="scope.row.permission.length + ' permission' + (scope.row.permission.length !== 1 ? 's' : '')"></span>
+          </template>
+        </el-table-column>
+        <el-table-column label="" min-width="1" />
+        <el-table-column label="Actions" width="140" fixed="right">
+          <template #default="scope">
+            <div style="display:flex;gap:0.25rem;align-items:center;">
+              <el-button size="small" link @click.stop="openEditDialog(scope.row)">Edit</el-button>
+              <span style="color:var(--border-color);">|</span>
+              <el-button size="small" link type="danger" @click.stop="deletePolicy(scope.row)"
+                :disabled="scope.row.system">Delete</el-button>
+            </div>
+          </template>
+        </el-table-column>
+      </el-table>
+      <div class="pagination-row">
+        <el-pagination
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          :page-sizes="[10, 20, 50]"
+          :total="filteredPolicies.length"
+          layout="total, sizes, prev, pager, next"
+          @size-change="applyFilters"
+          @current-change="p => currentPage = p"
+        />
+      </div>
+    </div>
+
+    <!-- Add Policy Dialog -->
+    <el-dialog v-model="showAddDialog" title="Add Policy" width="480px" @closed="resetAddForm">
+      <el-form :model="addForm" label-width="110px" style="padding:1rem 1rem 0;">
+        <el-form-item label="Name *">
+          <el-input v-model="addForm.name" placeholder="e.g. read-only" autocomplete="off" />
+        </el-form-item>
+        <el-form-item label="Permissions">
+          <el-select v-model="addForm.permissions" multiple filterable allow-create
+            placeholder="Select or type permission names" style="width:100%;">
+            <el-option v-for="p in allPermissionNames" :key="p" :label="p" :value="p" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="showAddDialog = false">Cancel</el-button>
+          <el-button type="primary" @click="submitAddPolicy" :loading="saving">Create</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- Edit Policy Dialog -->
+    <el-dialog v-model="showEditDialog" title="Edit Policy" width="480px" @closed="resetEditForm">
+      <el-form :model="editForm" label-width="110px" style="padding:1rem 1rem 0;">
+        <el-form-item label="Name">
+          <el-input v-model="editForm.name" disabled />
+        </el-form-item>
+        <el-form-item label="Permissions">
+          <el-select v-model="editForm.permissions" multiple filterable allow-create
+            placeholder="Select or type permission names" style="width:100%;">
+            <el-option v-for="p in allPermissionNames" :key="p" :label="p" :value="p" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="showEditDialog = false">Cancel</el-button>
+          <el-button type="primary" @click="submitEditPolicy" :loading="saving">Save</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- Policy Detail Drawer -->
+    <el-drawer v-model="showDetailDrawer" direction="rtl" size="380px">
+      <template #header>
+        <div style="display:flex;align-items:center;gap:0.5rem;">
+          <i class="fa fa-file-shield" style="color:var(--peach);font-size:1.1rem;"></i>
+          <span style="font-weight:600;font-size:1rem;" v-text="detailPolicy.name"></span>
+          <el-tag v-if="detailPolicy.system" type="warning" size="small"
+            style="margin-left:auto;border-radius:6px;">System</el-tag>
+        </div>
+      </template>
+      <div v-if="detailLoading" style="text-align:center;padding:3rem;">
+        <i class="fa fa-spinner fa-spin fa-2x" style="color:var(--peach);"></i>
+      </div>
+      <div v-else style="padding:0 0.25rem;">
+        <div class="drawer-section-label">PERMISSIONS</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:1.5rem;min-height:24px;">
+          <el-tag v-for="p in detailPolicy.permissions" :key="p" v-text="p" type="success" size="small"
+            class="perm-tag" style="border-radius:6px;font-family:monospace;"
+            @click="openPermDrawer(p)" />
+          <span v-if="!detailPolicy.permissions.length" style="font-size:0.85rem;color:var(--text-secondary);">No permissions</span>
+        </div>
+        <div class="drawer-section-label" style="margin-top:0.5rem;">ROLES</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;min-height:24px;">
+          <el-tag v-for="r in detailPolicy.roles" :key="r" v-text="r" style="border-radius:6px;" />
+          <span v-if="!detailPolicy.roles.length" style="font-size:0.85rem;color:var(--text-secondary);">No roles</span>
+        </div>
+      </div>
+    </el-drawer>
+
+    <!-- Permission Detail Drawer -->
+    <el-drawer v-model="showPermDrawer" direction="rtl" size="340px" :append-to-body="true">
+      <template #header>
+        <div style="display:flex;align-items:center;gap:0.5rem;">
+          <i class="fa fa-key" style="color:var(--peach);font-size:1rem;"></i>
+          <span style="font-weight:600;font-size:1rem;" v-text="permDetail.name"></span>
+        </div>
+      </template>
+      <div v-if="permLoading" style="text-align:center;padding:3rem;">
+        <i class="fa fa-spinner fa-spin fa-2x" style="color:var(--peach);"></i>
+      </div>
+      <div v-else style="padding:0 0.25rem;">
+        <div class="perm-kv" style="margin-bottom:1.25rem;">
+          <span class="perm-kv-label">Service</span>
+          <span class="perm-kv-value" v-text="permDetail.service || '—'"></span>
+          <span class="perm-kv-label">Method</span>
+          <span class="perm-kv-value" v-text="permDetail.method || '—'"></span>
+          <span class="perm-kv-label">Path</span>
+          <span class="perm-kv-value" v-text="permDetail.path || '—'"></span>
+          <span class="perm-kv-label">Action</span>
+          <span class="perm-kv-value" v-text="permDetail.action || '—'"></span>
+          <span class="perm-kv-label">Effect</span>
+          <span :class="permDetail.effect ? 'effect-allow' : 'effect-deny'" v-text="permDetail.effect ? 'Allow' : 'Deny'"></span>
+        </div>
+        <div style="font-size:0.75rem;color:var(--text-secondary);" v-if="permDetail.updated_at"
+          v-text="'Updated ' + fmtTime(permDetail.updated_at)">
+        </div>
+      </div>
+    </el-drawer>
+
+  </main>
+</script>
+
+<script>
+const { createApp, ref, computed, onMounted } = Vue;
+createApp({
+  template: '#policies-tpl',
+  setup() {
+    const allPolicies        = ref([]);
+    const allPermissionNames = ref([]);
+    const loading            = ref(false);
+    const saving             = ref(false);
+    const searchQuery        = ref('');
+    const currentPage        = ref(1);
+    const pageSize           = ref(10);
+    const portalUser         = ref(PORTAL_USER);
+    const portalInitials     = ref(PORTAL_INITIALS);
+    const authPrefix         = ref(AUTH_PREFIX);
+    const dbEnabled          = PORTAL_DB_ENABLED;
+
+    const showAddDialog  = ref(false);
+    const showEditDialog = ref(false);
+    const addForm        = ref({ name: '', permissions: [] });
+    const editForm       = ref({ name: '', permissions: [] });
+
+    const showDetailDrawer = ref(false);
+    const detailLoading    = ref(false);
+    const detailPolicy     = ref({ name: '', permissions: [], roles: [], system: false });
+
+    const showPermDrawer = ref(false);
+    const permLoading    = ref(false);
+    const permDetail     = ref({ name: '', service: '', method: '', path: '', action: '', effect: true, updated_at: '' });
+
+    const { showProfile, toggleProfile } = useProfile();
+
+    const filteredPolicies = computed(() => {
+      const q = searchQuery.value.toLowerCase();
+      return !q ? allPolicies.value : allPolicies.value.filter(p => p.name.toLowerCase().includes(q));
+    });
+    const pagedPolicies = computed(() => {
+      const s = (currentPage.value - 1) * pageSize.value;
+      return filteredPolicies.value.slice(s, s + pageSize.value);
+    });
+    function applyFilters() { currentPage.value = 1; }
+
+    async function fetchPolicies() {
+      loading.value = true;
+      try {
+        const resp = await fetch(AUTH_PREFIX + '/auth/policy/?limit=200');
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const body = await resp.json();
+        allPolicies.value = body.data.items || [];
+      } catch(e) {
+        ElementPlus.ElMessage({ message: e.message, type: 'error', plain: true });
+      } finally { loading.value = false; }
+    }
+
+    async function fetchPermissionNames() {
+      try {
+        const resp = await fetch(AUTH_PREFIX + '/auth/permission/?limit=500');
+        if (!resp.ok) return;
+        const body = await resp.json();
+        const data = body.data;
+        const names = [];
+        for (const svc of Object.values(data.items || {})) {
+          for (const p of svc) names.push(p.name);
+        }
+        allPermissionNames.value = names.sort();
+      } catch(_) {}
+    }
+
+    async function openDetailDrawer(row) {
+      showDetailDrawer.value = true;
+      detailPolicy.value = { name: row.name, permissions: [], roles: [], system: row.system || false };
+      detailLoading.value = true;
+      try {
+        const resp = await fetch(AUTH_PREFIX + '/auth/policy/' + row.name);
+        if (!resp.ok) throw new Error('failed');
+        const body = await resp.json();
+        const p = body.data;
+        detailPolicy.value = {
+          name:        p.name,
+          permissions: p.permission || [],
+          roles:       p.roles      || [],
+          system:      p.system     || false,
+        };
+      } catch(_) {} finally { detailLoading.value = false; }
+    }
+
+    async function openPermDrawer(permName) {
+      showPermDrawer.value = true;
+      permDetail.value = { name: permName, service: '', method: '', path: '', action: '', effect: true, updated_at: '' };
+      permLoading.value = true;
+      try {
+        const resp = await fetch(AUTH_PREFIX + '/auth/permission/' + permName);
+        if (resp.ok) {
+          const body = await resp.json();
+          const p = body.data;
+          permDetail.value = {
+            name:       p.name,
+            service:    p.service    || '',
+            method:     p.method     || '',
+            path:       p.path       || '',
+            action:     p.action     || '',
+            effect:     p.effect,
+            updated_at: p.updated_at || '',
+          };
+        }
+      } catch(_) {} finally { permLoading.value = false; }
+    }
+
+    function openAddDialog() { resetAddForm(); showAddDialog.value = true; }
+    function resetAddForm() { addForm.value = { name: '', permissions: [] }; }
+
+    async function submitAddPolicy() {
+      if (!addForm.value.name) {
+        ElementPlus.ElMessage({ message: 'Name is required', type: 'warning', plain: true }); return;
+      }
+      saving.value = true;
+      try {
+        const resp = await fetch(AUTH_PREFIX + '/auth/policy/', {
+          method: 'POST', headers: jsonHeaders(),
+          body: JSON.stringify({ name: addForm.value.name, permission: addForm.value.permissions }),
+        });
+        if (!resp.ok) {
+          const msg = await apiError(resp, 'Failed to create policy');
+          ElementPlus.ElMessage({ message: msg, type: 'error', plain: true }); return;
+        }
+        showAddDialog.value = false;
+        ElementPlus.ElMessage({ message: 'Policy created', type: 'success', plain: true });
+        fetchPolicies();
+      } catch(e) {
+        ElementPlus.ElMessage({ message: e.message, type: 'error', plain: true });
+      } finally { saving.value = false; }
+    }
+
+    function openEditDialog(row) {
+      editForm.value = { name: row.name, permissions: [...(row.permission || [])] };
+      showEditDialog.value = true;
+    }
+    function resetEditForm() { editForm.value = { name: '', permissions: [] }; }
+
+    async function submitEditPolicy() {
+      saving.value = true;
+      try {
+        const resp = await fetch(AUTH_PREFIX + '/auth/policy/' + editForm.value.name, {
+          method: 'PUT', headers: jsonHeaders(),
+          body: JSON.stringify({ name: editForm.value.name, permission: editForm.value.permissions }),
+        });
+        if (!resp.ok) {
+          const msg = await apiError(resp, 'Failed to update policy');
+          ElementPlus.ElMessage({ message: msg, type: 'error', plain: true }); return;
+        }
+        showEditDialog.value = false;
+        ElementPlus.ElMessage({ message: 'Policy updated', type: 'success', plain: true });
+        fetchPolicies();
+      } catch(e) {
+        ElementPlus.ElMessage({ message: e.message, type: 'error', plain: true });
+      } finally { saving.value = false; }
+    }
+
+    async function deletePolicy(row) {
+      try {
+        await ElementPlus.ElMessageBox.confirm(
+          'Delete policy "' + row.name + '"?',
+          'Confirm Delete', { confirmButtonText: 'Delete', cancelButtonText: 'Cancel', type: 'warning' }
+        );
+      } catch(_) { return; }
+      try {
+        const resp = await fetch(AUTH_PREFIX + '/auth/policy/' + row.name, {
+          method: 'DELETE', headers: jsonHeaders(),
+        });
+        if (!resp.ok) {
+          const msg = await apiError(resp, 'Failed to delete policy');
+          ElementPlus.ElMessage({ message: msg, type: 'error', plain: true }); return;
+        }
+        ElementPlus.ElMessage({ message: 'Policy deleted', type: 'success', plain: true });
+        fetchPolicies();
+      } catch(e) {
+        ElementPlus.ElMessage({ message: e.message, type: 'error', plain: true });
+      }
+    }
+
+    onMounted(() => { fetchPolicies(); fetchPermissionNames(); });
+    return {
+      allPolicies, allPermissionNames, filteredPolicies, pagedPolicies,
+      loading, saving, searchQuery, currentPage, pageSize,
+      portalUser, portalInitials, authPrefix, dbEnabled, showProfile, toggleProfile,
+      showAddDialog, addForm, showEditDialog, editForm,
+      showDetailDrawer, detailLoading, detailPolicy,
+      showPermDrawer, permLoading, permDetail,
+      applyFilters, fetchPolicies, openAddDialog, resetAddForm,
+      submitAddPolicy, openEditDialog, resetEditForm, submitEditPolicy,
+      deletePolicy, openDetailDrawer, openPermDrawer,
+      fmtTime,
+    };
+  }
+}).use(ElementPlus).mount('#app');
+</script>
+</body>
+</html>
+{{end}}

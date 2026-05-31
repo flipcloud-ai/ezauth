@@ -1,0 +1,18 @@
+server:
+  force_https: true
+  debug: true
+  tls:
+    enabled: true
+auth:
+  providers:
+  - name: test2
+    issuer: https://dev-hj2do2d4b6ko1pd5.us.auth0.com
+    redirect_url: https://127.0.0.1:8443/ezauth/callback
+  jwt:
+    signingmethod: hs512
+    secret_key: test-jwt-secret-key-for-32bytes!!
+  static:
+  - user: test
+    password: test1234
+  - user: admin
+    password: password

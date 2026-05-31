@@ -1,0 +1,377 @@
+{{define "admin/groups.html"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{if and .AppName (not .HideAppName)}}{{.AppName}} — {{end}}Admin — Groups</title>
+  <link rel="icon" type="image/svg+xml" href="{{.LogoURL}}">
+  <script src="{{.StaticPrefix}}/vendor/vue.global.prod.js"></script>
+  <link rel="stylesheet" href="{{.StaticPrefix}}/vendor/element-plus.css" />
+  <script src="{{.StaticPrefix}}/vendor/element-plus.full.min.js"></script>
+  <link rel="stylesheet" href="{{.StaticPrefix}}/css/all.min.css" />
+  <link rel="stylesheet" href="{{.StaticPrefix}}/css/portal.css">
+  <script>const AUTH_PREFIX = "{{.AuthPrefix}}"; const CSRF_TOKEN = "{{.CSRFToken}}"; const PORTAL_USER = "{{.Username}}"; const PORTAL_INITIALS = "{{.UserInitials}}"; const PORTAL_DB_ENABLED = {{.DBEnabled}};</script>
+  <script src="{{.StaticPrefix}}/scripts/portal.js"></script>
+  <style>
+    .member-row {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:0.375rem 0; border-bottom:1px solid var(--border-color);
+      font-size:0.875rem;
+    }
+    .member-row:last-child { border-bottom:none; }
+  </style>
+</head>
+<body>
+<div class="layout">
+  {{template "admin/nav.html" .}}
+  <div id="app" class="main-area"></div>
+</div>
+
+<script type="text/x-template" id="groups-tpl">
+  <header class="top-header">
+    <div class="breadcrumb">
+      <span>Admin</span>
+      <i class="fa fa-chevron-right"></i>
+      <span>Access</span>
+      <i class="fa fa-chevron-right"></i>
+      <span class="crumb-active">Groups</span>
+    </div>
+    <div class="header-right" style="position:relative;">
+      <div class="header-username" v-text="portalUser"></div>
+      <div class="header-avatar" @click.stop="toggleProfile" v-text="portalInitials"></div>
+      <div v-if="showProfile" class="profile-popover" @click.stop>
+        <div class="profile-popover-user">
+          <div class="profile-popover-avatar" v-text="portalInitials"></div>
+          <div class="profile-popover-info">
+            <div class="profile-popover-name" v-text="portalUser || '—'"></div>
+          </div>
+        </div>
+        <div class="profile-popover-actions">
+          <a :href="authPrefix + '/portal/profile'" class="profile-popover-action">
+            <i class="fa fa-user"></i> My Profile
+          </a>
+          <a v-if="dbEnabled" :href="authPrefix + '/portal/tokens'" class="profile-popover-action">
+            <i class="fa fa-key"></i> Access Tokens
+          </a>
+          <a :href="authPrefix + '/logout'" class="profile-popover-action danger">
+            <i class="fa fa-right-from-bracket"></i> Sign out
+          </a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="page-content">
+    <div class="page-header-row">
+      <div class="page-heading">
+        <h1>Groups</h1>
+        <p>Manage user groups and their role assignments.</p>
+      </div>
+      <el-button class="btn-primary" @click="openAddDialog">
+        <i class="fa fa-plus" style="margin-right:6px;"></i>Add Group
+      </el-button>
+    </div>
+
+    <div class="filter-row">
+      <el-input v-model="searchQuery" placeholder="Search groups" clearable
+        @input="applyFilters" style="width:240px;" />
+      <el-button circle @click="fetchGroups" :loading="loading">
+        <i class="fa fa-rotate-right"></i>
+      </el-button>
+    </div>
+
+    <div class="section-card" v-loading="loading">
+      <el-table :data="pagedGroups" style="width:100%;cursor:pointer;"
+        @row-click="openDetailDrawer">
+        <el-table-column prop="name" label="Group Name" min-width="200" />
+        <el-table-column label="" min-width="1" />
+        <el-table-column label="Actions" width="140" fixed="right">
+          <template #default="scope">
+            <div style="display:flex;gap:0.25rem;align-items:center;">
+              <el-button size="small" link @click.stop="openEditDialog(scope.row)">Edit</el-button>
+              <span style="color:var(--border-color);">|</span>
+              <el-button size="small" link type="danger" @click.stop="deleteGroup(scope.row)">Delete</el-button>
+            </div>
+          </template>
+        </el-table-column>
+      </el-table>
+      <div class="pagination-row">
+        <el-pagination
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          :page-sizes="[10, 20, 50]"
+          :total="filteredGroups.length"
+          layout="total, sizes, prev, pager, next"
+          @size-change="applyFilters"
+          @current-change="p => currentPage = p"
+        />
+      </div>
+    </div>
+
+    <!-- Add Group Dialog -->
+    <el-dialog v-model="showAddDialog" title="Add Group" width="400px" @closed="addForm.name = ''">
+      <el-form :model="addForm" label-width="90px" style="padding:1rem 1rem 0;">
+        <el-form-item label="Name *">
+          <el-input v-model="addForm.name" placeholder="e.g. developers" autocomplete="off" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="showAddDialog = false">Cancel</el-button>
+          <el-button type="primary" @click="submitAddGroup" :loading="saving">Create</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- Edit Group Dialog (rename + roles combined) -->
+    <el-dialog v-model="showEditDialog" title="Edit Group" width="440px" @closed="resetEditForm">
+      <el-form :model="editForm" label-width="90px" style="padding:1rem 1rem 0;">
+        <el-form-item label="Name *">
+          <el-input v-model="editForm.name" autocomplete="off" />
+        </el-form-item>
+        <el-form-item label="Roles">
+          <el-select v-model="editForm.roles" multiple filterable
+            placeholder="Select roles" style="width:100%;" :loading="editRolesLoading">
+            <el-option v-for="r in allRoleNames" :key="r" :label="r" :value="r" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="showEditDialog = false">Cancel</el-button>
+          <el-button type="primary" @click="submitEditGroup" :loading="saving">Save</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- Group Detail Drawer -->
+    <el-drawer v-model="showDetailDrawer" direction="rtl" size="360px">
+      <template #header>
+        <div style="display:flex;align-items:center;gap:0.5rem;">
+          <i class="fa fa-users" style="color:var(--peach);font-size:1.1rem;"></i>
+          <span style="font-weight:600;font-size:1rem;" v-text="detailGroup.name"></span>
+        </div>
+      </template>
+      <div v-if="detailLoading" style="text-align:center;padding:3rem;">
+        <i class="fa fa-spinner fa-spin fa-2x" style="color:var(--peach);"></i>
+      </div>
+      <div v-else style="padding:0 0.25rem;">
+        <div class="drawer-section-label">ROLES</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:1.5rem;min-height:24px;">
+          <el-tag v-for="r in detailGroup.roles" :key="r" v-text="r" style="border-radius:6px;" />
+          <span v-if="!detailGroup.roles.length" style="font-size:0.85rem;color:var(--text-secondary);">No roles assigned</span>
+        </div>
+        <div class="drawer-section-label" style="margin-top:0.5rem;">MEMBERS</div>
+        <div v-if="!detailGroup.users.length" style="font-size:0.85rem;color:var(--text-secondary);">No members</div>
+        <div v-for="u in detailGroup.users" :key="u.id" class="member-row">
+          <span v-text="u.username"></span>
+        </div>
+      </div>
+    </el-drawer>
+
+  </main>
+</script>
+
+<script>
+const { createApp, ref, computed, onMounted } = Vue;
+createApp({
+  template: '#groups-tpl',
+  setup() {
+    const allGroups      = ref([]);
+    const loading        = ref(false);
+    const saving         = ref(false);
+    const searchQuery    = ref('');
+    const currentPage    = ref(1);
+    const pageSize       = ref(10);
+    const portalUser     = ref(PORTAL_USER);
+    const portalInitials = ref(PORTAL_INITIALS);
+    const authPrefix     = ref(AUTH_PREFIX);
+    const dbEnabled      = PORTAL_DB_ENABLED;
+
+    const showAddDialog  = ref(false);
+    const addForm        = ref({ name: '' });
+
+    const showEditDialog    = ref(false);
+    const editForm          = ref({ oldName: '', name: '', roles: [] });
+    const editRolesLoading  = ref(false);
+    const allRoleNames      = ref([]);
+
+    const showDetailDrawer = ref(false);
+    const detailLoading    = ref(false);
+    const detailGroup      = ref({ name: '', roles: [], users: [] });
+
+    const { showProfile, toggleProfile } = useProfile();
+
+    const filteredGroups = computed(() => {
+      const q = searchQuery.value.toLowerCase();
+      return !q ? allGroups.value : allGroups.value.filter(g => g.name.toLowerCase().includes(q));
+    });
+    const pagedGroups = computed(() => {
+      const s = (currentPage.value - 1) * pageSize.value;
+      return filteredGroups.value.slice(s, s + pageSize.value);
+    });
+    function applyFilters() { currentPage.value = 1; }
+
+    async function fetchGroups() {
+      loading.value = true;
+      try {
+        const resp = await fetch(AUTH_PREFIX + '/groups/?limit=100');
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const body = await resp.json();
+        allGroups.value = (body.data.items || []);
+      } catch(e) {
+        ElementPlus.ElMessage({ message: e.message, type: 'error', plain: true });
+      } finally { loading.value = false; }
+    }
+
+    async function openDetailDrawer(row) {
+      showDetailDrawer.value = true;
+      detailGroup.value = { name: row.name, roles: [], users: [] };
+      detailLoading.value = true;
+      try {
+        const resp = await fetch(AUTH_PREFIX + '/groups/' + row.name);
+        if (!resp.ok) throw new Error('failed');
+        const body = await resp.json();
+        const g = body.data;
+        detailGroup.value = {
+          name:  g.name,
+          roles: g.roles  || [],
+          users: g.users  || [],
+        };
+      } catch(_) {} finally { detailLoading.value = false; }
+    }
+
+    function openAddDialog() { addForm.value.name = ''; showAddDialog.value = true; }
+
+    async function submitAddGroup() {
+      if (!addForm.value.name) {
+        ElementPlus.ElMessage({ message: 'Name is required', type: 'warning', plain: true }); return;
+      }
+      saving.value = true;
+      try {
+        const resp = await fetch(AUTH_PREFIX + '/groups/', {
+          method: 'POST', headers: jsonHeaders(),
+          body: JSON.stringify({ name: addForm.value.name }),
+        });
+        if (!resp.ok) {
+          const msg = await apiError(resp, 'Failed to create group');
+          ElementPlus.ElMessage({ message: msg, type: 'error', plain: true }); return;
+        }
+        showAddDialog.value = false;
+        ElementPlus.ElMessage({ message: 'Group created', type: 'success', plain: true });
+        fetchGroups();
+      } catch(e) {
+        ElementPlus.ElMessage({ message: e.message, type: 'error', plain: true });
+      } finally { saving.value = false; }
+    }
+
+    async function fetchAllRoles() {
+      if (allRoleNames.value.length) return;
+      editRolesLoading.value = true;
+      try {
+        const resp = await fetch(AUTH_PREFIX + '/auth/role/?limit=200');
+        if (!resp.ok) return;
+        const body = await resp.json();
+        allRoleNames.value = body.data.roles || [];
+      } catch(_) {} finally { editRolesLoading.value = false; }
+    }
+
+    async function openEditDialog(row) {
+      editForm.value = { oldName: row.name, name: row.name, roles: [] };
+      showEditDialog.value = true;
+      await fetchAllRoles();
+      try {
+        const resp = await fetch(AUTH_PREFIX + '/groups/' + row.name);
+        if (resp.ok) {
+          const body = await resp.json();
+          editForm.value.roles = body.data.roles || [];
+        }
+      } catch(_) {}
+    }
+
+    function resetEditForm() { editForm.value = { oldName: '', name: '', roles: [] }; }
+
+    async function submitEditGroup() {
+      if (!editForm.value.name) {
+        ElementPlus.ElMessage({ message: 'Name is required', type: 'warning', plain: true }); return;
+      }
+      saving.value = true;
+      try {
+        // rename if name changed
+        if (editForm.value.name !== editForm.value.oldName) {
+          const resp = await fetch(AUTH_PREFIX + '/groups/' + editForm.value.oldName, {
+            method: 'PUT', headers: jsonHeaders(),
+            body: JSON.stringify({ name: editForm.value.name }),
+          });
+          if (!resp.ok) {
+            const msg = await apiError(resp, 'Failed to rename group');
+            ElementPlus.ElMessage({ message: msg, type: 'error', plain: true }); return;
+          }
+        }
+        // diff roles
+        const groupName = editForm.value.name;
+        const resp = await fetch(AUTH_PREFIX + '/groups/' + groupName);
+        const currentRoles = resp.ok ? ((await resp.json()).data.roles || []) : [];
+        const desired  = editForm.value.roles;
+        const toAdd    = desired.filter(r => !currentRoles.includes(r));
+        const toRemove = currentRoles.filter(r => !desired.includes(r));
+        if (toAdd.length) {
+          await fetch(AUTH_PREFIX + '/groups/' + groupName + '/roles/assign', {
+            method: 'POST', headers: jsonHeaders(),
+            body: JSON.stringify({ roles: toAdd }),
+          });
+        }
+        if (toRemove.length) {
+          await fetch(AUTH_PREFIX + '/groups/' + groupName + '/roles/unassign', {
+            method: 'DELETE', headers: jsonHeaders(),
+            body: JSON.stringify({ roles: toRemove }),
+          });
+        }
+        showEditDialog.value = false;
+        ElementPlus.ElMessage({ message: 'Group updated', type: 'success', plain: true });
+        fetchGroups();
+      } catch(e) {
+        ElementPlus.ElMessage({ message: e.message, type: 'error', plain: true });
+      } finally { saving.value = false; }
+    }
+
+    async function deleteGroup(row) {
+      try {
+        await ElementPlus.ElMessageBox.confirm(
+          'Delete group "' + row.name + '"? Members will lose this group.',
+          'Confirm Delete', { confirmButtonText: 'Delete', cancelButtonText: 'Cancel', type: 'warning' }
+        );
+      } catch(_) { return; }
+      try {
+        const resp = await fetch(AUTH_PREFIX + '/groups/' + row.name, {
+          method: 'DELETE', headers: jsonHeaders(),
+        });
+        if (!resp.ok) {
+          const msg = await apiError(resp, 'Failed to delete group');
+          ElementPlus.ElMessage({ message: msg, type: 'error', plain: true }); return;
+        }
+        ElementPlus.ElMessage({ message: 'Group deleted', type: 'success', plain: true });
+        fetchGroups();
+      } catch(e) {
+        ElementPlus.ElMessage({ message: e.message, type: 'error', plain: true });
+      }
+    }
+
+    onMounted(fetchGroups);
+    return {
+      allGroups, filteredGroups, pagedGroups, loading, saving,
+      searchQuery, currentPage, pageSize,
+      portalUser, portalInitials, authPrefix, dbEnabled, showProfile, toggleProfile,
+      showAddDialog, addForm,
+      showEditDialog, editForm, editRolesLoading, allRoleNames,
+      showDetailDrawer, detailLoading, detailGroup,
+      applyFilters, fetchGroups, openAddDialog, submitAddGroup,
+      openEditDialog, resetEditForm, submitEditGroup, deleteGroup, openDetailDrawer,
+    };
+  }
+}).use(ElementPlus).mount('#app');
+</script>
+</body>
+</html>
+{{end}}

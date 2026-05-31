@@ -1,0 +1,11 @@
+# gitleaks configuration for ezauth (EzAuth)
+# Test config files contain base64-encoded test secrets used by unit tests.
+# These are not real credentials.
+
+title = "ezauth gitleaks config"
+
+[allowlist]
+  description = "test config files with base64-encoded test secrets"
+  paths = [
+    "test/config/",
+  ]

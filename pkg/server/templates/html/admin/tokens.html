@@ -1,0 +1,330 @@
+{{define "admin/tokens.html"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{if and .AppName (not .HideAppName)}}{{.AppName}} — {{end}}Access Tokens</title>
+  <link rel="icon" type="image/svg+xml" href="{{.LogoURL}}">
+  <script src="{{.StaticPrefix}}/vendor/vue.global.prod.js"></script>
+  <link rel="stylesheet" href="{{.StaticPrefix}}/vendor/element-plus.css" />
+  <script src="{{.StaticPrefix}}/vendor/element-plus.full.min.js"></script>
+  <link rel="stylesheet" href="{{.StaticPrefix}}/css/all.min.css" />
+  <link rel="stylesheet" href="{{.StaticPrefix}}/css/portal.css">
+  <style>.revoke-dialog .el-dialog__header{padding-bottom:0;border-bottom:none;}.revoke-dialog .el-dialog__body{padding-top:1rem;}</style>
+  <script>const AUTH_PREFIX = "{{.AuthPrefix}}"; const CSRF_TOKEN = "{{.CSRFToken}}"; const PORTAL_USER = "{{.Username}}"; const PORTAL_INITIALS = "{{.UserInitials}}"; const PORTAL_DB_ENABLED = {{.DBEnabled}};</script>
+  <script src="{{.StaticPrefix}}/scripts/portal.js"></script>
+</head>
+<body>
+<div class="layout">
+  {{template "admin/nav.html" .}}
+  <div id="app" class="main-area"></div>
+</div>
+
+<script type="text/x-template" id="tokens-tpl">
+  <header class="top-header">
+    <div class="breadcrumb">
+      <span>My Account</span>
+      <i class="fa fa-chevron-right"></i>
+      <span class="crumb-active">Access Tokens</span>
+    </div>
+    <div class="header-right" style="position:relative;">
+      <div class="header-username" v-text="portalUser"></div>
+      <div class="header-avatar" @click.stop="toggleProfile" v-text="portalInitials"></div>
+      <div v-if="showProfile" class="profile-popover" @click.stop>
+        <div class="profile-popover-user">
+          <div class="profile-popover-avatar" v-text="portalInitials"></div>
+          <div class="profile-popover-info">
+            <div class="profile-popover-name" v-text="portalUser || '—'"></div>
+          </div>
+        </div>
+        <div class="profile-popover-actions">
+          <a :href="authPrefix + '/portal/profile'" class="profile-popover-action">
+            <i class="fa fa-user"></i> My Profile
+          </a>
+          <a v-if="dbEnabled" :href="authPrefix + '/portal/tokens'" class="profile-popover-action">
+            <i class="fa fa-key"></i> Access Tokens
+          </a>
+          <a :href="authPrefix + '/logout'" class="profile-popover-action danger">
+            <i class="fa fa-right-from-bracket"></i> Sign out
+          </a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="page-content">
+    <div class="page-header-row">
+      <div class="page-heading">
+        <h1>Access Tokens</h1>
+        <p>Manage personal access tokens for API authentication.</p>
+      </div>
+      <el-button class="btn-primary" size="default" @click="openCreateDialog">
+        <i class="fa fa-plus" style="margin-right:6px;"></i>Create Token
+      </el-button>
+    </div>
+
+    <div class="section-card" v-loading="loading">
+      <el-table :data="tokens" style="width:100%;" table-layout="auto">
+        <el-table-column prop="name"   label="Name"       min-width="160" show-overflow-tooltip />
+        <el-table-column label="Created At" min-width="150">
+          <template #default="scope">
+            <span v-text="fmtTime(scope.row.created_at)"></span>
+          </template>
+        </el-table-column>
+        <el-table-column label="Expires At" min-width="150">
+          <template #default="scope">
+            <span v-text="scope.row.expires_at ? fmtTime(scope.row.expires_at) : 'Never'"></span>
+          </template>
+        </el-table-column>
+        <el-table-column label="Last Used" min-width="150">
+          <template #default="scope">
+            <span v-text="scope.row.last_used_at ? fmtTime(scope.row.last_used_at) : '—'"></span>
+          </template>
+        </el-table-column>
+        <el-table-column label="Actions" width="100" fixed="right">
+          <template #default="scope">
+            <el-button size="small" type="danger" @click="confirmRevoke(scope.row)">
+              <i class="fa fa-trash"></i>
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
+
+    <!-- Create Token Dialog -->
+    <el-dialog v-model="showCreateDialog" title="Create Access Token" width="460px" @closed="resetCreateForm">
+      <el-form :model="createForm" label-width="120px" style="padding-right:1rem;padding-top:1rem;">
+        <el-form-item label="Token Name *">
+          <el-input v-model="createForm.name" placeholder="e.g. ci-pipeline" maxlength="128" show-word-limit />
+        </el-form-item>
+        <el-form-item label="Expires At">
+          <div style="width:100%;">
+            <el-date-picker
+              v-model="createForm.expiresAt"
+              type="datetime"
+              placeholder="Required — max 1 year from now"
+              :disabled-date="disabledDate"
+              format="YYYY-MM-DD HH:mm:ss"
+              style="width:100%;"
+              @change="createForm.expiresShortcut=''"
+            />
+            <div style="display:flex;gap:6px;margin-top:8px;">
+              <button v-for="s in expiryShortcuts" :key="s.text" type="button"
+                v-text="s.text"
+                @click="applyShortcut(s)"
+                :style="createForm.expiresShortcut===s.text ? activeShortcutStyle : shortcutStyle">
+              </button>
+            </div>
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="showCreateDialog = false">Cancel</el-button>
+          <el-button type="primary" @click="submitCreateToken" :loading="saving">Create</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- Revoke Confirmation Dialog -->
+    <el-dialog v-model="showRevokeDialog" title="Revoke Token" width="420px" :close-on-click-modal="false" class="revoke-dialog">
+      <div style="display:flex;align-items:flex-start;gap:0.75rem;">
+        <i class="fa fa-triangle-exclamation" style="color:var(--el-color-danger);font-size:1.4rem;margin-top:2px;flex-shrink:0;"></i>
+        <div>
+          <p style="margin:0 0 0.4rem;font-weight:600;">Are you sure you want to revoke <em v-text="revokeTarget.name"></em>?</p>
+          <p style="margin:0;color:var(--el-text-color-secondary);">This action cannot be undone. Any application using this token will lose access immediately.</p>
+        </div>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="showRevokeDialog = false">Cancel</el-button>
+          <el-button type="danger" @click="revokeToken(revokeTarget.id)" :loading="revoking">Revoke</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- Token Display Dialog (shown once after creation) -->
+    <el-dialog v-model="showTokenDialog" title="Token Created" width="520px" :close-on-click-modal="false">
+      <el-alert
+        title="Copy your token now. It will not be shown again."
+        type="warning"
+        :closable="false"
+        style="margin-bottom:1rem;"
+      />
+      <div style="display:flex;align-items:center;gap:0.5rem;background:var(--el-fill-color-light);border-radius:6px;padding:0.75rem 1rem;word-break:break-all;font-family:monospace;font-size:0.875rem;">
+        <span style="flex:1;" v-text="newToken"></span>
+        <el-button size="small" @click="copyToken">
+          <i class="fa fa-copy"></i>
+        </el-button>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button type="primary" @click="showTokenDialog = false">Done</el-button>
+        </div>
+      </template>
+    </el-dialog>
+  </main>
+</script>
+
+<script>
+const { createApp, ref, onMounted } = Vue;
+createApp({
+  template: '#tokens-tpl',
+  setup() {
+    const portalUser     = ref(PORTAL_USER);
+    const portalInitials = ref(PORTAL_INITIALS);
+    const authPrefix     = ref(AUTH_PREFIX);
+    const dbEnabled      = PORTAL_DB_ENABLED;
+    const { showProfile, toggleProfile } = useProfile();
+
+    const tokens = ref([]);
+    const loading = ref(false);
+    const saving  = ref(false);
+    const revoking = ref(false);
+
+    const showCreateDialog  = ref(false);
+    const showRevokeDialog  = ref(false);
+    const revokeTarget      = ref({ id: '', name: '' });
+    const showTokenDialog  = ref(false);
+    const newToken         = ref('');
+    const createForm = ref({ name: '', expiresAt: null, expiresShortcut: '' });
+
+    const maxExpiresAt = new Date(Date.now() + 365 * 24 * 3600000);
+    function disabledDate(d) {
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      return d < today || d > maxExpiresAt;
+    }
+    const expiryShortcuts = [
+      { text: '1 hour',    hours: 1 },
+      { text: '24 hours',  hours: 24 },
+      { text: '30 days',   hours: 24 * 30 },
+      { text: '1 year',    hours: 24 * 365 },
+    ];
+    function applyShortcut(s) {
+      const d = new Date(); d.setTime(d.getTime() + s.hours * 3600000);
+      createForm.value.expiresAt = d;
+      createForm.value.expiresShortcut = s.text;
+    }
+    const shortcutStyle = {
+      flex: '1', padding: '4px 0', borderRadius: '999px', fontSize: '12px', cursor: 'pointer',
+      border: '1px solid var(--el-border-color)', background: 'transparent',
+      color: 'var(--el-text-color-regular)', lineHeight: '1.6', textAlign: 'center',
+    };
+    const activeShortcutStyle = {
+      ...shortcutStyle,
+      border: '1px solid var(--el-color-primary)',
+      background: 'var(--el-color-primary-light-9)',
+      color: 'var(--el-color-primary)',
+      fontWeight: '600',
+    };
+
+    async function fetchTokens() {
+      loading.value = true;
+      try {
+        const resp = await fetch(AUTH_PREFIX + '/me/tokens');
+        if (!resp.ok) throw new Error('Failed to load tokens (HTTP ' + resp.status + ')');
+        const body = await resp.json();
+        tokens.value = body.data || [];
+      } catch(e) {
+        ElementPlus.ElMessage({ message: e.message, type: 'error', plain: true });
+      } finally {
+        loading.value = false;
+      }
+    }
+
+    function openCreateDialog() {
+      resetCreateForm();
+      showCreateDialog.value = true;
+    }
+
+    function resetCreateForm() {
+      createForm.value = { name: '', expiresAt: null, expiresShortcut: '' };
+    }
+
+    async function submitCreateToken() {
+      if (!createForm.value.name) {
+        ElementPlus.ElMessage({ message: 'Token name is required', type: 'warning', plain: true });
+        return;
+      }
+      if (!createForm.value.expiresAt) {
+        ElementPlus.ElMessage({ message: 'Expiry date is required (max 1 year)', type: 'warning', plain: true });
+        return;
+      }
+      saving.value = true;
+      try {
+        const body = { name: createForm.value.name, expires_at: new Date(createForm.value.expiresAt).toISOString() };
+        const resp = await fetch(AUTH_PREFIX + '/me/tokens', {
+          method: 'POST',
+          headers: jsonHeaders(),
+          body: JSON.stringify(body),
+        });
+        if (!resp.ok) {
+          const msg = await apiError(resp, 'Failed to create token');
+          ElementPlus.ElMessage({ message: msg, type: 'error', plain: true });
+          return;
+        }
+        const body = await resp.json();
+        newToken.value = body.data.token;
+        showCreateDialog.value = false;
+        showTokenDialog.value  = true;
+        fetchTokens();
+      } catch(e) {
+        ElementPlus.ElMessage({ message: e.message, type: 'error', plain: true });
+      } finally {
+        saving.value = false;
+      }
+    }
+
+    function confirmRevoke(row) {
+      revokeTarget.value = { id: row.id, name: row.name };
+      showRevokeDialog.value = true;
+    }
+
+    async function revokeToken(id) {
+      revoking.value = true;
+      try {
+        const resp = await fetch(AUTH_PREFIX + '/me/tokens/' + id, {
+          method: 'DELETE',
+          headers: jsonHeaders(),
+        });
+        if (!resp.ok) {
+          const msg = await apiError(resp, 'Failed to revoke token');
+          ElementPlus.ElMessage({ message: msg, type: 'error', plain: true });
+          return;
+        }
+        showRevokeDialog.value = false;
+        ElementPlus.ElMessage({ message: 'Token revoked', type: 'success', plain: true });
+        fetchTokens();
+      } catch(e) {
+        ElementPlus.ElMessage({ message: e.message, type: 'error', plain: true });
+      } finally {
+        revoking.value = false;
+      }
+    }
+
+    function copyToken() {
+      navigator.clipboard.writeText(newToken.value).then(() => {
+        ElementPlus.ElMessage({ message: 'Token copied to clipboard', type: 'success', plain: true });
+      }).catch(() => {
+        ElementPlus.ElMessage({ message: 'Copy failed — please select and copy manually', type: 'warning', plain: true });
+      });
+    }
+
+    onMounted(fetchTokens);
+
+    return {
+      portalUser, portalInitials, authPrefix, dbEnabled, showProfile, toggleProfile,
+      tokens, loading, saving, revoking,
+      showCreateDialog, showTokenDialog, newToken, createForm,
+      showRevokeDialog, revokeTarget,
+      openCreateDialog, resetCreateForm, submitCreateToken,
+      confirmRevoke, revokeToken, copyToken,
+      disabledDate, expiryShortcuts, applyShortcut, shortcutStyle, activeShortcutStyle, fmtTime,
+    };
+  }
+}).use(ElementPlus).mount('#app');
+</script>
+</body>
+</html>
+{{end}}

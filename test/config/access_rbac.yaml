@@ -1,0 +1,5 @@
+server:
+  debug: true
+access:
+  rbac:
+    enabled: true

@@ -1,0 +1,21 @@
+server:
+  force_https: true
+  debug: true
+  http2: true
+  tls:
+    enabled: true
+    version: TLS1.3
+    cert_path: /opt/ezauth/tls/cert.crt
+    key_path: /opt/ezauth/tls/key.pem
+auth:
+  provider:
+    name: test
+    login_url: https://www.youtube.com
+  jwt:
+    signingmethod: hs512
+    secret_key: test-jwt-secret-key-for-32bytes!!
+  static:
+  - user: test
+    password: test1234
+  - user: admin
+    password: password

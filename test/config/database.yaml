@@ -1,0 +1,19 @@
+server:
+  force_https: true
+  debug: true
+  tls:
+    enabled: true
+  metrics:
+    enabled: true
+  pprof:
+    enabled: true
+auth:
+  jwt:
+    signingmethod: hs512
+    secret_key: test-jwt-secret-key-for-32bytes!!
+database:
+  driver: postgres
+  hostname: localhost
+  database_name: ezauth
+  user: myuser
+  password: mypassword

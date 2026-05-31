@@ -1,0 +1,17 @@
+ea74f233ff791fdd3dbaab63f310ed195630d7b8:pkg/utils/encryption/cipher_test.go:generic-api-key:152
+6f6c6ab089216ba236074b8fcf6e6a47e1128fc5:pkg/sessions/redis_test.go:generic-api-key:267
+6f6c6ab089216ba236074b8fcf6e6a47e1128fc5:pkg/sessions/redis_test.go:generic-api-key:294
+6f6c6ab089216ba236074b8fcf6e6a47e1128fc5:pkg/sessions/redis_test.go:generic-api-key:310
+4b5795d384f99fdcb72f4e1c4883b6c8a55c6b62:pkg/database/orm/pgx/provider_test.go:generic-api-key:169
+61be3dbfb5b0021d060f0bbd404c07abba9fb806:pkg/database/orm/pgx/provider_test.go:generic-api-key:137
+61be3dbfb5b0021d060f0bbd404c07abba9fb806:pkg/database/orm/pgx/provider_test.go:generic-api-key:141
+74ac086adc4a6948cea94f1352bcd9ae775414f5:.gitleaks-baseline.json:generic-api-key:10
+74ac086adc4a6948cea94f1352bcd9ae775414f5:.gitleaks-baseline.json:generic-api-key:73
+74ac086adc4a6948cea94f1352bcd9ae775414f5:.gitleaks-baseline.json:generic-api-key:94
+74ac086adc4a6948cea94f1352bcd9ae775414f5:.gitleaks-baseline.json:generic-api-key:115
+74ac086adc4a6948cea94f1352bcd9ae775414f5:.gitleaks-baseline.json:generic-api-key:136
+c3c50d4d74bda3e8fe36ddf50675bba6756ea6a6:.gitleaks-baseline.json:generic-api-key:10
+c3c50d4d74bda3e8fe36ddf50675bba6756ea6a6:.gitleaks-baseline.json:generic-api-key:73
+c3c50d4d74bda3e8fe36ddf50675bba6756ea6a6:.gitleaks-baseline.json:generic-api-key:94
+c3c50d4d74bda3e8fe36ddf50675bba6756ea6a6:.gitleaks-baseline.json:generic-api-key:115
+c3c50d4d74bda3e8fe36ddf50675bba6756ea6a6:.gitleaks-baseline.json:generic-api-key:136

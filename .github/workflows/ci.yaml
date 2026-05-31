@@ -1,0 +1,221 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - 'release/**'
+  pull_request:
+    branches:
+      - main
+      - develop
+      - 'release/**'
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: golangci-lint
+    runs-on: [dev, linux]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12.1
+          skip-cache: true
+          only-new-issues: true
+
+  test:
+    name: ginkgo integration test
+    runs-on: [dev, linux]
+    timeout-minutes: 30
+    needs: [lint, swagger]
+    env:
+      CGO_ENABLED: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Install build dependencies
+        run: sudo apt-get install -y gcc make
+
+      - name: Install Google Chrome
+        run: |
+          if ! command -v google-chrome &>/dev/null; then
+            curl -fsSL https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -o /tmp/chrome.deb
+            sudo apt-get install -y /tmp/chrome.deb
+          fi
+
+      - name: Setup test directories
+        run: |
+          sudo mkdir -p /opt/ezauth
+          sudo chown -R ubuntu:ubuntu /opt/ezauth
+          mkdir -p /opt/ezauth/tls
+          openssl req -x509 -newkey rsa:2048 \
+            -keyout /opt/ezauth/tls/key.pem \
+            -out /opt/ezauth/tls/cert.crt \
+            -days 1 -nodes -subj "/CN=localhost"
+
+      - name: Verify Docker is available
+        run: sudo docker info
+
+      - name: Install ginkgo CLI
+        run: go install github.com/onsi/ginkgo/v2/ginkgo@v2.27.5
+
+      - name: Run tests
+        run: make test-integration GINKGO_EXTRA_FLAGS="--cover --coverprofile=cover.profile --json-report=report.json"
+
+      - name: Generate coverage HTML
+        if: always()
+        run: go tool cover -html=cover.profile -o coverage.html
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: coverage
+          path: |
+            cover.profile
+            coverage.html
+            report.json
+          retention-days: 7
+
+  e2e:
+    name: e2e test
+    runs-on: [dev, linux]
+    timeout-minutes: 30
+    needs: [lint, swagger, build]
+    env:
+      CGO_ENABLED: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Install build dependencies
+        run: sudo apt-get install -y gcc make
+
+      - name: Setup test directories
+        run: |
+          sudo mkdir -p /opt/ezauth
+          sudo chown -R ubuntu:ubuntu /opt/ezauth
+          mkdir -p /opt/ezauth/tls
+          openssl req -x509 -newkey rsa:2048 \
+            -keyout /opt/ezauth/tls/key.pem \
+            -out /opt/ezauth/tls/cert.crt \
+            -days 1 -nodes -subj "/CN=localhost"
+
+      - name: Verify Docker is available
+        run: sudo docker info
+
+      - name: Grant runner user Docker access (snap docker)
+        run: |
+          SOCK=$(sudo docker info -f '{{.Host}}' 2>/dev/null | sed 's|^unix://||')
+          if [ -n "$SOCK" ] && [ -S "$SOCK" ]; then
+            sudo chmod 666 "$SOCK"
+            echo "DOCKER_HOST=unix://$SOCK" >> "$GITHUB_ENV"
+          fi
+
+      - name: Install Google Chrome
+        run: |
+          if ! command -v google-chrome &>/dev/null; then
+            curl -fsSL https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -o /tmp/chrome.deb
+            sudo apt-get install -y /tmp/chrome.deb
+          fi
+
+      - name: Install ginkgo CLI
+        run: go install github.com/onsi/ginkgo/v2/ginkgo@v2.27.5
+
+      - name: Build
+        run: go build ./...
+
+      - name: Run e2e tests
+        run: make test-e2e
+
+  swagger:
+    name: swagger spec check
+    runs-on: [dev, linux]
+    timeout-minutes: 10
+    steps:
+      - name: Install git
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq git
+
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Check swagger spec is up to date
+        run: ./scripts/generate-swagger.sh --check
+
+  security:
+    name: security scan
+    runs-on: [dev, linux]
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Run govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
+      - name: Run gitleaks
+        run: |
+          GITLEAKS_VERSION=8.24.3
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /tmp gitleaks
+          /tmp/gitleaks detect --source . --redact --exit-code 1
+
+  build:
+    name: go build
+    runs-on: [dev, linux]
+    needs: [test, security]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...

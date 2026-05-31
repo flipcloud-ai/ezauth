@@ -1,0 +1,524 @@
+{{define "admin/providers.html"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{if and .AppName (not .HideAppName)}}{{.AppName}} — {{end}}Admin — Providers</title>
+  <link rel="icon" type="image/svg+xml" href="{{.LogoURL}}">
+  <script src="{{.StaticPrefix}}/vendor/vue.global.prod.js"></script>
+  <link rel="stylesheet" href="{{.StaticPrefix}}/vendor/element-plus.css" />
+  <script src="{{.StaticPrefix}}/vendor/element-plus.full.min.js"></script>
+  <link rel="stylesheet" href="{{.StaticPrefix}}/css/all.min.css" />
+  <link rel="stylesheet" href="{{.StaticPrefix}}/css/portal.css">
+  <script>const AUTH_PREFIX = "{{.AuthPrefix}}"; const CSRF_TOKEN = "{{.CSRFToken}}"; const PORTAL_USER = "{{.Username}}"; const PORTAL_INITIALS = "{{.UserInitials}}"; const PORTAL_DB_ENABLED = {{.DBEnabled}};</script>
+  <script src="{{.StaticPrefix}}/scripts/portal.js"></script>
+  <style>
+    .type-badge {
+      font-size:0.75rem; font-weight:600; padding:2px 8px; border-radius:4px;
+      background:var(--el-color-primary-light-8); color:var(--el-color-primary-dark-2);
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+  {{template "admin/nav.html" .}}
+  <div id="app" class="main-area"></div>
+</div>
+
+<script type="text/x-template" id="providers-tpl">
+  <header class="top-header">
+    <div class="breadcrumb">
+      <span>Admin</span>
+      <i class="fa fa-chevron-right"></i>
+      <span class="crumb-active">Providers</span>
+    </div>
+    <div class="header-right" style="position:relative;">
+      <div class="header-username" v-text="portalUser"></div>
+      <div class="header-avatar" @click.stop="toggleProfile" v-text="portalInitials"></div>
+      <div v-if="showProfile" class="profile-popover" @click.stop>
+        <div class="profile-popover-user">
+          <div class="profile-popover-avatar" v-text="portalInitials"></div>
+          <div class="profile-popover-info">
+            <div class="profile-popover-name" v-text="portalUser || '—'"></div>
+          </div>
+        </div>
+        <div class="profile-popover-actions">
+          <a :href="authPrefix + '/portal/profile'" class="profile-popover-action">
+            <i class="fa fa-user"></i> My Profile
+          </a>
+          <a v-if="dbEnabled" :href="authPrefix + '/portal/tokens'" class="profile-popover-action">
+            <i class="fa fa-key"></i> Access Tokens
+          </a>
+          <a :href="authPrefix + '/logout'" class="profile-popover-action danger">
+            <i class="fa fa-right-from-bracket"></i> Sign out
+          </a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="page-content">
+    <div class="page-header-row">
+      <div class="page-heading">
+        <h1>Providers</h1>
+        <p>Manage OAuth2 / OIDC identity provider configurations.</p>
+      </div>
+      <el-button class="btn-primary" @click="openAddDialog">
+        <i class="fa fa-plus" style="margin-right:6px;"></i>Add Provider
+      </el-button>
+    </div>
+
+    <div class="filter-row">
+      <el-input v-model="searchQuery" placeholder="Search providers" clearable
+        @input="applyFilters" style="width:240px;" />
+      <el-select v-model="typeFilter" placeholder="All Types" clearable
+        @change="applyFilters" style="width:150px;">
+        <el-option label="All Types" value="" />
+        <el-option label="oauth2" value="oauth2" />
+      </el-select>
+      <el-button circle @click="fetchProviders" :loading="loading">
+        <i class="fa fa-rotate-right"></i>
+      </el-button>
+    </div>
+
+    <div class="section-card" v-loading="loading">
+      <el-table :data="pagedProviders" style="width:100%;cursor:pointer;" table-layout="auto"
+        @row-click="openDetailDrawer">
+        <el-table-column prop="provider_name" label="Name" min-width="160" />
+        <el-table-column label="Type" width="100">
+          <template #default="scope">
+            <span class="type-badge" v-text="scope.row.type || 'oauth2'"></span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="issuer" label="Issuer" min-width="300" show-overflow-tooltip />
+        <el-table-column label="Scopes" min-width="160">
+          <template #default="scope">
+            <el-tag v-for="s in (scope.row.scopes || '').split(' ').filter(Boolean)" :key="s"
+              size="small" type="info" style="margin:1px 2px;border-radius:4px;" v-text="s" />
+            <span v-if="!(scope.row.scopes || '').trim()" style="color:var(--text-secondary);">—</span>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="Enabled" width="30">
+          <template #default="scope">
+            <div @click.stop>
+              <el-switch v-model="scope.row.enabled"
+                :disabled="scope.row.static"
+                @change="toggleEnabled(scope.row)" />
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="" width="80">
+          <template #default="scope">
+            <el-tag v-if="scope.row.static" type="warning" size="small" style="border-radius:4px;">Static</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="Actions" width="100" fixed="right">
+          <template #default="scope">
+            <div style="display:flex;gap:0.375rem;">
+              <el-tooltip :content="scope.row.static ? 'Static providers cannot be edited here' : 'Edit'" placement="top">
+                <el-button size="small" @click.stop="openEditDialog(scope.row)" :disabled="scope.row.static">
+                  <i class="fa fa-pen"></i>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip :content="scope.row.static ? 'Static providers cannot be deleted here' : 'Delete'" placement="top">
+                <el-button size="small" type="danger" @click.stop="deleteProvider(scope.row)" :disabled="scope.row.static">
+                  <i class="fa fa-trash"></i>
+                </el-button>
+              </el-tooltip>
+            </div>
+          </template>
+        </el-table-column>
+      </el-table>
+      <div class="pagination-row">
+        <el-pagination
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          :page-sizes="[10, 20, 50]"
+          :total="filteredProviders.length"
+          layout="total, sizes, prev, pager, next"
+          @size-change="applyFilters"
+          @current-change="p => currentPage = p"
+        />
+      </div>
+    </div>
+
+    <!-- Add / Edit Provider Dialog -->
+    <el-dialog v-model="showFormDialog" :title="editingName ? 'Edit Provider' : 'Add Provider'"
+      width="600px" @closed="resetForm">
+      <el-form :model="form" label-width="130px" style="padding:1rem 1rem 0;">
+
+        <el-form-item label="Name *">
+          <el-input v-model="form.provider_name" :disabled="!!editingName" placeholder="e.g. google" />
+        </el-form-item>
+        <el-form-item label="Type">
+          <el-select v-model="form.type" style="width:100%;">
+            <el-option label="oauth2" value="oauth2" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="Client ID *">
+          <el-input v-model="form.client_id" autocomplete="off" />
+        </el-form-item>
+        <el-form-item label="Client Secret">
+          <el-input v-model="form.client_secret" type="password" show-password autocomplete="new-password"
+            :placeholder="editingName ? 'Leave blank to keep existing' : ''" />
+        </el-form-item>
+        <el-form-item label="Redirect URL">
+          <el-input v-model="form.redirect_url" placeholder="https://example.com/callback" />
+        </el-form-item>
+        <el-form-item label="Scopes">
+          <el-select v-model="form.scope" multiple filterable allow-create default-first-option
+            placeholder="e.g. openid email profile" style="width:100%;">
+            <el-option label="openid" value="openid" />
+            <el-option label="email" value="email" />
+            <el-option label="profile" value="profile" />
+            <el-option label="offline_access" value="offline_access" />
+          </el-select>
+        </el-form-item>
+
+        <el-divider style="margin:0.5rem 0 1rem;" />
+
+        <el-form-item label="Admin Group">
+          <el-input v-model="form.admin_group" placeholder="e.g. admins"
+            title="Users in this group get admin access for this provider" />
+        </el-form-item>
+        <el-form-item label="Allowed Groups">
+          <el-select v-model="form.allowed_groups" multiple filterable allow-create
+            placeholder="All groups allowed if empty" style="width:100%;">
+            <el-option v-for="g in form.allowed_groups" :key="g" :label="g" :value="g" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="Skip Nonce">
+          <el-switch v-model="form.skip_nonce" />
+          <span style="margin-left:0.75rem;font-size:0.8rem;color:var(--text-secondary);">
+            Disable nonce validation (use only if IdP does not support it)
+          </span>
+        </el-form-item>
+
+        <el-divider style="margin:0.5rem 0 0.25rem;" />
+
+        <!-- OIDC Config (optional, collapsed by default) -->
+        <el-collapse v-model="oidcOpen" style="border:none;margin-bottom:0.5rem;">
+          <el-collapse-item name="oidc" style="border:none;">
+            <template #title>
+              <span style="font-size:0.85rem;font-weight:600;color:var(--text-secondary);letter-spacing:.04em;">
+                OIDC CONFIG
+              </span>
+              <span style="font-size:0.78rem;color:var(--text-secondary);margin-left:0.5rem;">
+                (optional — auto-discovered from issuer if left blank)
+              </span>
+            </template>
+            <div style="padding-top:0.5rem;">
+              <el-form-item label="Issuer">
+                <el-input v-model="form.issuer" placeholder="https://accounts.google.com" />
+              </el-form-item>
+              <el-form-item label="Auth URL">
+                <el-input v-model="form.authorization_endpoint" placeholder="https://…/authorize" />
+              </el-form-item>
+              <el-form-item label="Token URL">
+                <el-input v-model="form.token_endpoint" placeholder="https://…/token" />
+              </el-form-item>
+              <el-form-item label="JWKs URL">
+                <el-input v-model="form.jwks_uri" placeholder="https://…/jwks" />
+              </el-form-item>
+              <el-form-item label="UserInfo URL">
+                <el-input v-model="form.userinfo_endpoint" placeholder="https://…/userinfo" />
+              </el-form-item>
+              <el-form-item label="Revocation URL">
+                <el-input v-model="form.revocation_endpoint" placeholder="https://…/revoke" />
+              </el-form-item>
+            </div>
+          </el-collapse-item>
+        </el-collapse>
+
+      </el-form>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="showFormDialog = false">Cancel</el-button>
+          <el-button type="primary" @click="submitForm" :loading="saving">
+            <span v-text="editingName ? 'Save Changes' : 'Create Provider'"></span>
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- Provider Detail Drawer -->
+    <el-drawer v-model="showDetailDrawer" direction="rtl" size="400px">
+      <template #header>
+        <div style="display:flex;align-items:center;gap:0.625rem;">
+          <i class="fa fa-plug" style="color:var(--peach);font-size:1.1rem;"></i>
+          <span style="font-weight:600;font-size:1rem;" v-text="detailProvider.provider_name"></span>
+          <span class="type-badge" style="margin-left:auto;" v-text="detailProvider.type || 'oauth2'"></span>
+        </div>
+      </template>
+      <div v-if="detailLoading" style="text-align:center;padding:3rem;">
+        <i class="fa fa-spinner fa-spin fa-2x" style="color:var(--peach);"></i>
+      </div>
+      <div v-else style="padding:0 0.25rem;">
+        <div class="drawer-section-label">IDENTITY</div>
+        <div class="drawer-kv">
+          <div class="drawer-field" style="grid-column:1/-1;">
+            <span class="drawer-field-label">Issuer</span>
+            <span class="drawer-field-value" v-text="detailProvider.issuer || '—'"></span>
+          </div>
+          <div class="drawer-field">
+            <span class="drawer-field-label">Client ID</span>
+            <span class="drawer-field-value" v-text="detailProvider.client_id || '—'"></span>
+          </div>
+          <div class="drawer-field">
+            <span class="drawer-field-label">Scopes</span>
+            <span class="drawer-field-value" v-text="detailProvider.scopes || '—'"></span>
+          </div>
+          <div class="drawer-field" style="grid-column:1/-1;">
+            <span class="drawer-field-label">Redirect URL</span>
+            <span class="drawer-field-value" v-text="detailProvider.redirect_url || '—'"></span>
+          </div>
+        </div>
+        <div class="drawer-section-label" style="margin-top:0.75rem;">ENDPOINTS</div>
+        <div class="drawer-kv">
+          <div class="drawer-field" style="grid-column:1/-1;">
+            <span class="drawer-field-label">Auth URL</span>
+            <span class="drawer-field-value" v-text="detailProvider.authorization_endpoint || '—'"></span>
+          </div>
+          <div class="drawer-field" style="grid-column:1/-1;">
+            <span class="drawer-field-label">Token URL</span>
+            <span class="drawer-field-value" v-text="detailProvider.token_endpoint || '—'"></span>
+          </div>
+        </div>
+        <div class="drawer-section-label" style="margin-top:0.75rem;">ACCESS CONTROL</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;min-height:24px;">
+          <el-tag v-for="g in (detailProvider.allowed_groups || [])" :key="g" v-text="g"
+            type="info" style="border-radius:6px;" />
+          <span v-if="!(detailProvider.allowed_groups||[]).length"
+            style="font-size:0.85rem;color:var(--text-secondary);">All groups allowed</span>
+        </div>
+        <div class="drawer-section-label" style="margin-top:1.25rem;">TIMESTAMPS</div>
+        <div class="drawer-kv">
+          <div class="drawer-field">
+            <span class="drawer-field-label">Created</span>
+            <span class="drawer-field-value" v-text="fmtShort(detailProvider.created_at)"></span>
+          </div>
+          <div class="drawer-field">
+            <span class="drawer-field-label">Updated</span>
+            <span class="drawer-field-value" v-text="fmtShort(detailProvider.updated_at)"></span>
+          </div>
+        </div>
+      </div>
+    </el-drawer>
+
+  </main>
+</script>
+
+<script>
+const { createApp, ref, computed, onMounted } = Vue;
+createApp({
+  template: '#providers-tpl',
+  setup() {
+    const portalUser     = ref(PORTAL_USER);
+    const portalInitials = ref(PORTAL_INITIALS);
+    const authPrefix     = ref(AUTH_PREFIX);
+    const dbEnabled      = PORTAL_DB_ENABLED;
+    const { showProfile, toggleProfile } = useProfile();
+
+    const allProviders = ref([]);
+    const loading      = ref(false);
+    const saving       = ref(false);
+    const searchQuery  = ref('');
+    const typeFilter   = ref('');
+    const currentPage  = ref(1);
+    const pageSize     = ref(10);
+
+    const showFormDialog   = ref(false);
+    const editingName      = ref('');
+    const oidcOpen         = ref([]);
+    const emptyForm = function() {
+      return {
+        provider_name: '', type: 'oauth2', client_id: '', client_secret: '',
+        redirect_url: '', scope: [],
+        admin_group: '', allowed_groups: [], skip_nonce: false,
+        issuer: '', authorization_endpoint: '', token_endpoint: '',
+        jwks_uri: '', userinfo_endpoint: '', revocation_endpoint: '',
+      };
+    };
+    const form = ref(emptyForm());
+
+    const showDetailDrawer = ref(false);
+    const detailLoading    = ref(false);
+    const detailProvider   = ref({});
+
+    const filteredProviders = computed(function() {
+      return allProviders.value.filter(function(p) {
+        const q = searchQuery.value.toLowerCase();
+        const matchQ = !q || (p.provider_name || '').toLowerCase().includes(q);
+        const matchT = !typeFilter.value || (p.type || 'oauth2') === typeFilter.value;
+        return matchQ && matchT;
+      });
+    });
+    const pagedProviders = computed(function() {
+      var s = (currentPage.value - 1) * pageSize.value;
+      return filteredProviders.value.slice(s, s + pageSize.value);
+    });
+    function applyFilters() { currentPage.value = 1; }
+
+    async function fetchProviders() {
+      loading.value = true;
+      try {
+        // ScanProviders: GET /provider/ not exposed — list each from cache via scan size param
+        // Use the scan endpoint with a large limit
+        const resp = await fetch(AUTH_PREFIX + '/provider/?limit=100');
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const body = await resp.json();
+        allProviders.value = body.data || [];
+      } catch(e) {
+        ElementPlus.ElMessage({ message: e.message, type: 'error', plain: true });
+      } finally { loading.value = false; }
+    }
+
+    async function openDetailDrawer(row) {
+      showDetailDrawer.value = true;
+      detailProvider.value = { ...row };
+      detailLoading.value = true;
+      try {
+        const resp = await fetch(AUTH_PREFIX + '/provider/' + row.provider_name);
+        if (!resp.ok) throw new Error('failed');
+        const body = await resp.json();
+        detailProvider.value = body.data;
+      } catch(_) {} finally { detailLoading.value = false; }
+    }
+
+    function openAddDialog() {
+      editingName.value = '';
+      form.value = emptyForm();
+      showFormDialog.value = true;
+    }
+
+    function openEditDialog(row) {
+      editingName.value = row.provider_name;
+      const toStr = function(v) { return v ? v.toString() : ''; };
+      form.value = {
+        provider_name:          row.provider_name,
+        type:                   row.type                   || 'oauth2',
+        client_id:              row.client_id              || '',
+        client_secret:          '',
+        redirect_url:           toStr(row.redirect_url),
+        scope:                  (row.scopes || row.scope || '').split(' ').filter(Boolean),
+        admin_group:            row.admin_group            || '',
+        allowed_groups:         row.allowed_groups         || [],
+        skip_nonce:             row.skip_nonce             || false,
+        issuer:                 toStr(row.issuer),
+        authorization_endpoint: toStr(row.authorization_endpoint),
+        token_endpoint:         toStr(row.token_endpoint),
+        jwks_uri:               toStr(row.jwks_uri),
+        userinfo_endpoint:      toStr(row.userinfo_endpoint),
+        revocation_endpoint:    toStr(row.revocation_endpoint),
+      };
+      // auto-expand OIDC section if any OIDC field is already set
+      oidcOpen.value = (form.value.issuer || form.value.authorization_endpoint) ? ['oidc'] : [];
+      showFormDialog.value = true;
+    }
+
+    function resetForm() { form.value = emptyForm(); editingName.value = ''; oidcOpen.value = []; }
+
+    async function submitForm() {
+      if (!form.value.provider_name) {
+        ElementPlus.ElMessage({ message: 'Name is required', type: 'warning', plain: true }); return;
+      }
+      saving.value = true;
+      try {
+        var isEdit = !!editingName.value;
+        var url    = AUTH_PREFIX + '/provider/' + (isEdit ? editingName.value : '');
+        var body   = { ...form.value };
+        body.scope = Array.isArray(body.scope) ? body.scope.join(' ') : (body.scope || '');
+        if (!body.client_secret) delete body.client_secret;
+        // omit empty OIDC fields so server doesn't overwrite with blanks
+        ['issuer','authorization_endpoint','token_endpoint','jwks_uri','userinfo_endpoint','revocation_endpoint'].forEach(function(k) {
+          if (!body[k]) delete body[k];
+        });
+        if (!body.admin_group) delete body.admin_group;
+        const resp = await fetch(url, {
+          method: isEdit ? 'PUT' : 'POST',
+          headers: jsonHeaders(),
+          body: JSON.stringify(body),
+        });
+        if (!resp.ok) {
+          const msg = await apiError(resp, 'Failed to save provider');
+          ElementPlus.ElMessage({ message: msg, type: 'error', plain: true }); return;
+        }
+        showFormDialog.value = false;
+        ElementPlus.ElMessage({ message: isEdit ? 'Provider updated' : 'Provider created', type: 'success', plain: true });
+        fetchProviders();
+      } catch(e) {
+        ElementPlus.ElMessage({ message: e.message, type: 'error', plain: true });
+      } finally { saving.value = false; }
+    }
+
+    async function deleteProvider(row) {
+      try {
+        await ElementPlus.ElMessageBox.confirm(
+          'Delete provider "' + row.provider_name + '"?',
+          'Confirm Delete', { confirmButtonText: 'Delete', cancelButtonText: 'Cancel', type: 'warning' }
+        );
+      } catch(_) { return; }
+      try {
+        const resp = await fetch(AUTH_PREFIX + '/provider/' + row.provider_name, {
+          method: 'DELETE', headers: jsonHeaders(),
+        });
+        if (!resp.ok) {
+          const msg = await apiError(resp, 'Failed to delete provider');
+          ElementPlus.ElMessage({ message: msg, type: 'error', plain: true }); return;
+        }
+        ElementPlus.ElMessage({ message: 'Provider deleted', type: 'success', plain: true });
+        fetchProviders();
+      } catch(e) {
+        ElementPlus.ElMessage({ message: e.message, type: 'error', plain: true });
+      }
+    }
+
+    async function toggleEnabled(row) {
+      try {
+        const resp = await fetch(AUTH_PREFIX + '/provider/' + row.provider_name, {
+          method: 'PUT',
+          headers: jsonHeaders(),
+          body: JSON.stringify({ enabled: row.enabled }),
+        });
+        if (!resp.ok) {
+          row.enabled = !row.enabled; // revert on failure
+          const msg = await apiError(resp, 'Failed to update provider');
+          ElementPlus.ElMessage({ message: msg, type: 'error', plain: true });
+        }
+      } catch(e) {
+        row.enabled = !row.enabled; // revert on failure
+        ElementPlus.ElMessage({ message: e.message, type: 'error', plain: true });
+      }
+    }
+
+    function fmtShort(t) {
+      if (!t || t.startsWith('0001-')) return '—';
+      const d = new Date(t);
+      const now = new Date();
+      const diff = now - d;
+      if (diff < 60000) return 'just now';
+      if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+      if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
+      if (diff < 2592000000) return Math.floor(diff / 86400000) + 'd ago';
+      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined });
+    }
+
+    onMounted(fetchProviders);
+    return {
+      allProviders, filteredProviders, pagedProviders, loading, saving,
+      searchQuery, typeFilter, currentPage, pageSize,
+      portalUser, portalInitials, authPrefix, dbEnabled, showProfile, toggleProfile,
+      showFormDialog, editingName, form, oidcOpen,
+      showDetailDrawer, detailLoading, detailProvider,
+      fmtTime, fmtShort, applyFilters, fetchProviders, toggleEnabled,
+      openAddDialog, openEditDialog, resetForm, submitForm,
+      openDetailDrawer, deleteProvider,
+    };
+  }
+}).use(ElementPlus).mount('#app');
+</script>
+</body>
+</html>
+{{end}}
