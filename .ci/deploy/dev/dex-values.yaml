@@ -1,0 +1,76 @@
+image:
+  tag: v2.41.1
+
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+service:
+  ports:
+    http:
+      port: 5556
+
+https:
+  enabled: false
+
+grpc:
+  enabled: false
+
+config:
+  # issuer is set at deploy time by helm-deploy-dex.sh via:
+  #   --set config.issuer=http://dex.<namespace>.svc.cluster.local:5556
+  issuer: ""
+
+  storage:
+    type: memory
+
+  web:
+    http: 0.0.0.0:5556
+
+  telemetry:
+    http: ""
+
+  oauth2:
+    skipApprovalScreen: true
+    responseTypes:
+      - code
+
+  enablePasswordDB: true
+
+  staticClients:
+    - id: ezauth-e2e
+      secret: ezauth-e2e-secret
+      name: ezauth e2e test client
+      redirectURIs:
+        - https://ezauth.dev.flipcloud.ai/ezauth/callback
+        - https://dex.dev.flipcloud.ai/callback
+        - http://localhost/callback
+
+  staticPasswords:
+    - email: testuser@mock.idp
+      # testpass
+      hash: "$2b$10$A8GiXKEstZu04Mwrt4J5B.w7NN3dpKy7ndQ1.6Aha1h/Cc8YCg6Ce"
+      username: testuser
+      userID: "testuser-id"
+    - email: adminuser@mock.idp
+      # adminpass
+      hash: "$2b$10$yEbHiwFHn8ZePkdAJbC1.ec61bJ0k38LXk.rUdVbiOd/2pGF88xzG"
+      username: adminuser
+      userID: "adminuser-id"
+    - email: alice@mock.idp
+      # pass
+      hash: "$2b$10$lhwPHlJyTwERtXvlyHkVm.2RCm9bJtglEx1FggGwpYMpD3IieKIEy"
+      username: alice
+      userID: "alice-id"
+
+ingress:
+  enabled: false
+
+serviceMonitor:
+  enabled: false

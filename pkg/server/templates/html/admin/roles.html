@@ -1,0 +1,404 @@
+{{define "admin/roles.html"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{if and .AppName (not .HideAppName)}}{{.AppName}} — {{end}}Admin — Roles</title>
+  <link rel="icon" type="image/svg+xml" href="{{.LogoURL}}">
+  <script src="{{.StaticPrefix}}/vendor/vue.global.prod.js"></script>
+  <link rel="stylesheet" href="{{.StaticPrefix}}/vendor/element-plus.css" />
+  <script src="{{.StaticPrefix}}/vendor/element-plus.full.min.js"></script>
+  <link rel="stylesheet" href="{{.StaticPrefix}}/css/all.min.css" />
+  <link rel="stylesheet" href="{{.StaticPrefix}}/css/portal.css">
+  <script>const AUTH_PREFIX = "{{.AuthPrefix}}"; const CSRF_TOKEN = "{{.CSRFToken}}"; const PORTAL_USER = "{{.Username}}"; const PORTAL_INITIALS = "{{.UserInitials}}"; const PORTAL_DB_ENABLED = {{.DBEnabled}};</script>
+  <script src="{{.StaticPrefix}}/scripts/portal.js"></script>
+</head>
+<body>
+<div class="layout">
+  {{template "admin/nav.html" .}}
+  <div id="app" class="main-area"></div>
+</div>
+
+<script type="text/x-template" id="roles-tpl">
+  <header class="top-header">
+    <div class="breadcrumb">
+      <span>Admin</span>
+      <i class="fa fa-chevron-right"></i>
+      <span>Access</span>
+      <i class="fa fa-chevron-right"></i>
+      <span class="crumb-active">Roles</span>
+    </div>
+    <div class="header-right" style="position:relative;">
+      <div class="header-username" v-text="portalUser"></div>
+      <div class="header-avatar" @click.stop="toggleProfile" v-text="portalInitials"></div>
+      <div v-if="showProfile" class="profile-popover" @click.stop>
+        <div class="profile-popover-user">
+          <div class="profile-popover-avatar" v-text="portalInitials"></div>
+          <div class="profile-popover-info">
+            <div class="profile-popover-name" v-text="portalUser || '—'"></div>
+          </div>
+        </div>
+        <div class="profile-popover-actions">
+          <a :href="authPrefix + '/portal/profile'" class="profile-popover-action">
+            <i class="fa fa-user"></i> My Profile
+          </a>
+          <a v-if="dbEnabled" :href="authPrefix + '/portal/tokens'" class="profile-popover-action">
+            <i class="fa fa-key"></i> Access Tokens
+          </a>
+          <a :href="authPrefix + '/logout'" class="profile-popover-action danger">
+            <i class="fa fa-right-from-bracket"></i> Sign out
+          </a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="page-content">
+    <div class="page-header-row">
+      <div class="page-heading">
+        <h1>Roles</h1>
+        <p>Define roles and their policy assignments.</p>
+      </div>
+      <el-button class="btn-primary" @click="openAddDialog">
+        <i class="fa fa-plus" style="margin-right:6px;"></i>Add Role
+      </el-button>
+    </div>
+
+    <div class="filter-row">
+      <el-input v-model="searchQuery" placeholder="Search roles" clearable
+        @input="applyFilters" style="width:240px;" />
+      <el-button circle @click="fetchRoles" :loading="loading">
+        <i class="fa fa-rotate-right"></i>
+      </el-button>
+    </div>
+
+    <div class="section-card" v-loading="loading">
+      <el-table :data="pagedRoles" style="width:100%;cursor:pointer;"
+        @row-click="openDetailDrawer">
+        <el-table-column prop="name" label="Role Name" min-width="200" />
+        <el-table-column label="" min-width="1" />
+        <el-table-column label="Actions" width="140" fixed="right">
+          <template #default="scope">
+            <div style="display:flex;gap:0.25rem;align-items:center;">
+              <el-button size="small" link @click.stop="openEditDialog(scope.row)">Edit</el-button>
+              <span style="color:var(--border-color);">|</span>
+              <el-button size="small" link type="danger" @click.stop="deleteRole(scope.row)"
+                :disabled="scope.row.system">Delete</el-button>
+            </div>
+          </template>
+        </el-table-column>
+      </el-table>
+      <div class="pagination-row">
+        <el-pagination
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          :page-sizes="[10, 20, 50]"
+          :total="filteredRoles.length"
+          layout="total, sizes, prev, pager, next"
+          @size-change="applyFilters"
+          @current-change="p => currentPage = p"
+        />
+      </div>
+    </div>
+
+    <!-- Add Role Dialog -->
+    <el-dialog v-model="showAddDialog" title="Add Role" width="420px" @closed="resetAddForm">
+      <el-form :model="addForm" label-width="90px" style="padding:1rem 1rem 0;">
+        <el-form-item label="Name *">
+          <el-input v-model="addForm.name" placeholder="e.g. editor" autocomplete="off" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="showAddDialog = false">Cancel</el-button>
+          <el-button type="primary" @click="submitAddRole" :loading="saving">Create</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- Edit Role Dialog (rename + policies + groups combined) -->
+    <el-dialog v-model="showEditDialog" title="Edit Role" width="480px" @closed="resetEditForm">
+      <el-form :model="editForm" label-width="90px" style="padding:1rem 1rem 0;">
+        <el-form-item label="Name *">
+          <el-input v-model="editForm.name" autocomplete="off" />
+        </el-form-item>
+        <el-form-item label="Policies">
+          <el-select v-model="editForm.policies" multiple filterable
+            placeholder="Select policies" style="width:100%;" :loading="editPoliciesLoading">
+            <el-option v-for="p in allPolicyNames" :key="p" :label="p" :value="p" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="Groups">
+          <el-select v-model="editForm.groups" multiple filterable
+            placeholder="Select groups" style="width:100%;" :loading="editGroupsLoading">
+            <el-option v-for="g in allGroupNames" :key="g" :label="g" :value="g" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="showEditDialog = false">Cancel</el-button>
+          <el-button type="primary" @click="submitEditRole" :loading="saving">Save</el-button>
+        </div>
+      </template>
+    </el-dialog>
+
+    <!-- Role Detail Drawer -->
+    <el-drawer v-model="showDetailDrawer" direction="rtl" size="360px">
+      <template #header>
+        <div style="display:flex;align-items:center;gap:0.5rem;">
+          <i class="fa fa-shield-halved" style="color:var(--peach);font-size:1.1rem;"></i>
+          <span style="font-weight:600;font-size:1rem;" v-text="detailRole.name"></span>
+          <el-tag v-if="detailRole.system" type="warning" size="small"
+            style="margin-left:auto;border-radius:6px;">System</el-tag>
+        </div>
+      </template>
+      <div v-if="detailLoading" style="text-align:center;padding:3rem;">
+        <i class="fa fa-spinner fa-spin fa-2x" style="color:var(--peach);"></i>
+      </div>
+      <div v-else style="padding:0 0.25rem;">
+        <div class="drawer-section-label">POLICIES</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:1.5rem;min-height:24px;">
+          <el-tag v-for="p in detailRole.policies" :key="p" v-text="p" style="border-radius:6px;" />
+          <span v-if="!detailRole.policies.length" style="font-size:0.85rem;color:var(--text-secondary);">No policies</span>
+        </div>
+        <div class="drawer-section-label" style="margin-top:0.5rem;">PERMISSIONS</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:1.5rem;min-height:24px;">
+          <el-tag v-for="p in detailRole.permissions" :key="p" v-text="p" type="success" size="small" style="border-radius:6px;font-family:monospace;" />
+          <span v-if="!detailRole.permissions.length" style="font-size:0.85rem;color:var(--text-secondary);">No permissions</span>
+        </div>
+        <div class="drawer-section-label" style="margin-top:0.5rem;">GROUPS</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:1.5rem;min-height:24px;">
+          <el-tag v-for="g in detailRole.groups" :key="g" v-text="g" style="border-radius:6px;" />
+          <span v-if="!detailRole.groups.length" style="font-size:0.85rem;color:var(--text-secondary);">Not assigned to any group</span>
+        </div>
+        <div class="drawer-section-label" style="margin-top:0.5rem;">USERS</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;min-height:24px;">
+          <el-tag v-for="u in detailRole.users" :key="u" v-text="u" type="info" size="small" style="border-radius:6px;" />
+          <span v-if="!detailRole.users.length" style="font-size:0.85rem;color:var(--text-secondary);">No users</span>
+        </div>
+      </div>
+    </el-drawer>
+
+  </main>
+</script>
+
+<script>
+const { createApp, ref, computed, onMounted } = Vue;
+createApp({
+  template: '#roles-tpl',
+  setup() {
+    const allRoles    = ref([]);
+    const loading     = ref(false);
+    const saving      = ref(false);
+    const searchQuery = ref('');
+    const currentPage = ref(1);
+    const pageSize    = ref(10);
+    const portalUser     = ref(PORTAL_USER);
+    const portalInitials = ref(PORTAL_INITIALS);
+    const authPrefix     = ref(AUTH_PREFIX);
+    const dbEnabled      = PORTAL_DB_ENABLED;
+
+    const showAddDialog = ref(false);
+    const addForm       = ref({ name: '' });
+
+    const showEditDialog     = ref(false);
+    const editForm           = ref({ oldName: '', name: '', policies: [], groups: [] });
+    const editPoliciesLoading = ref(false);
+    const editGroupsLoading  = ref(false);
+    const allPolicyNames     = ref([]);
+    const allGroupNames      = ref([]);
+
+    const showDetailDrawer = ref(false);
+    const detailLoading    = ref(false);
+    const detailRole       = ref({ name: '', policies: [], permissions: [], groups: [], users: [], system: false });
+
+    const { showProfile, toggleProfile } = useProfile();
+
+    const filteredRoles = computed(() => {
+      const q = searchQuery.value.toLowerCase();
+      return !q ? allRoles.value : allRoles.value.filter(r => r.name.toLowerCase().includes(q));
+    });
+    const pagedRoles = computed(() => {
+      const s = (currentPage.value - 1) * pageSize.value;
+      return filteredRoles.value.slice(s, s + pageSize.value);
+    });
+    function applyFilters() { currentPage.value = 1; }
+
+    async function fetchRoles() {
+      loading.value = true;
+      try {
+        const resp = await fetch(AUTH_PREFIX + '/auth/role/?limit=100');
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const body = await resp.json();
+        allRoles.value = (body.data.roles || []).map(function(name) { return { name: name }; });
+      } catch(e) {
+        ElementPlus.ElMessage({ message: e.message, type: 'error', plain: true });
+      } finally { loading.value = false; }
+    }
+
+    async function openDetailDrawer(row) {
+      showDetailDrawer.value = true;
+      detailRole.value = { name: row.name, policies: [], permissions: [], groups: [], users: [], system: false };
+      detailLoading.value = true;
+      try {
+        const resp = await fetch(AUTH_PREFIX + '/auth/role/' + row.name);
+        if (!resp.ok) throw new Error('failed');
+        const body = await resp.json();
+        const r = body.data;
+        detailRole.value = {
+          name:        r.name,
+          policies:    r.policy       || [],
+          permissions: r.permissions  || [],
+          groups:      r.groups       || [],
+          users:       r.users        || [],
+          system:      r.system       || false,
+        };
+      } catch(_) {} finally { detailLoading.value = false; }
+    }
+
+    function resetAddForm() { addForm.value.name = ''; }
+
+    async function submitAddRole() {
+      if (!addForm.value.name) {
+        ElementPlus.ElMessage({ message: 'Name is required', type: 'warning', plain: true }); return;
+      }
+      saving.value = true;
+      try {
+        const resp = await fetch(AUTH_PREFIX + '/auth/role/', {
+          method: 'POST', headers: jsonHeaders(),
+          body: JSON.stringify({ name: addForm.value.name, policy: [] }),
+        });
+        if (!resp.ok) {
+          const msg = await apiError(resp, 'Failed to create role');
+          ElementPlus.ElMessage({ message: msg, type: 'error', plain: true }); return;
+        }
+        showAddDialog.value = false;
+        ElementPlus.ElMessage({ message: 'Role created', type: 'success', plain: true });
+        fetchRoles();
+      } catch(e) {
+        ElementPlus.ElMessage({ message: e.message, type: 'error', plain: true });
+      } finally { saving.value = false; }
+    }
+
+    async function fetchAllPolicies() {
+      if (allPolicyNames.value.length) return;
+      editPoliciesLoading.value = true;
+      try {
+        const resp = await fetch(AUTH_PREFIX + '/auth/policy/?limit=200');
+        if (!resp.ok) return;
+        const body = await resp.json();
+        allPolicyNames.value = (body.data.items || []).map(function(p) { return p.name; });
+      } catch(_) {} finally { editPoliciesLoading.value = false; }
+    }
+
+    async function fetchAllGroups() {
+      if (allGroupNames.value.length) return;
+      editGroupsLoading.value = true;
+      try {
+        const resp = await fetch(AUTH_PREFIX + '/groups/?limit=200');
+        if (!resp.ok) return;
+        const body = await resp.json();
+        allGroupNames.value = (body.data.items || []).map(function(g) { return g.name; });
+      } catch(_) {} finally { editGroupsLoading.value = false; }
+    }
+
+    async function openEditDialog(row) {
+      editForm.value = { oldName: row.name, name: row.name, policies: [], groups: [] };
+      showEditDialog.value = true;
+      await Promise.all([fetchAllPolicies(), fetchAllGroups()]);
+      try {
+        const resp = await fetch(AUTH_PREFIX + '/auth/role/' + row.name);
+        if (resp.ok) {
+          const body = await resp.json();
+          editForm.value.policies = body.data.policy  || [];
+          editForm.value.groups   = body.data.groups  || [];
+        }
+      } catch(_) {}
+    }
+
+    function resetEditForm() { editForm.value = { oldName: '', name: '', policies: [], groups: [] }; }
+
+    async function submitEditRole() {
+      if (!editForm.value.name) {
+        ElementPlus.ElMessage({ message: 'Name is required', type: 'warning', plain: true }); return;
+      }
+      saving.value = true;
+      try {
+        const finalName = editForm.value.name;
+        // PUT with new name + policy list (handles rename + policy assignment atomically)
+        const putResp = await fetch(AUTH_PREFIX + '/auth/role/' + editForm.value.oldName, {
+          method: 'PUT', headers: jsonHeaders(),
+          body: JSON.stringify({ name: finalName, policy: editForm.value.policies }),
+        });
+        if (!putResp.ok) {
+          const msg = await apiError(putResp, 'Failed to update role');
+          ElementPlus.ElMessage({ message: msg, type: 'error', plain: true }); return;
+        }
+        // diff groups
+        const gResp = await fetch(AUTH_PREFIX + '/auth/role/' + finalName);
+        const currentGroups = gResp.ok ? ((await gResp.json()).data.groups || []) : [];
+        const desired  = editForm.value.groups;
+        const toAdd    = desired.filter(g => !currentGroups.includes(g));
+        const toRemove = currentGroups.filter(g => !desired.includes(g));
+        for (const g of toAdd) {
+          await fetch(AUTH_PREFIX + '/groups/' + g + '/roles/assign', {
+            method: 'POST', headers: jsonHeaders(),
+            body: JSON.stringify({ roles: [finalName] }),
+          });
+        }
+        for (const g of toRemove) {
+          await fetch(AUTH_PREFIX + '/groups/' + g + '/roles/unassign', {
+            method: 'DELETE', headers: jsonHeaders(),
+            body: JSON.stringify({ roles: [finalName] }),
+          });
+        }
+        showEditDialog.value = false;
+        ElementPlus.ElMessage({ message: 'Role updated', type: 'success', plain: true });
+        fetchRoles();
+      } catch(e) {
+        ElementPlus.ElMessage({ message: e.message, type: 'error', plain: true });
+      } finally { saving.value = false; }
+    }
+
+    async function deleteRole(row) {
+      try {
+        await ElementPlus.ElMessageBox.confirm(
+          'Delete role "' + row.name + '"?',
+          'Confirm Delete', { confirmButtonText: 'Delete', cancelButtonText: 'Cancel', type: 'warning' }
+        );
+      } catch(_) { return; }
+      try {
+        const resp = await fetch(AUTH_PREFIX + '/auth/role/' + row.name, {
+          method: 'DELETE', headers: jsonHeaders(),
+        });
+        if (!resp.ok) {
+          const msg = await apiError(resp, 'Failed to delete role');
+          ElementPlus.ElMessage({ message: msg, type: 'error', plain: true }); return;
+        }
+        ElementPlus.ElMessage({ message: 'Role deleted', type: 'success', plain: true });
+        fetchRoles();
+      } catch(e) {
+        ElementPlus.ElMessage({ message: e.message, type: 'error', plain: true });
+      }
+    }
+
+    onMounted(fetchRoles);
+    return {
+      allRoles, filteredRoles, pagedRoles, loading, saving,
+      searchQuery, currentPage, pageSize,
+      portalUser, portalInitials, authPrefix, dbEnabled, showProfile, toggleProfile,
+      showAddDialog, addForm,
+      showEditDialog, editForm, editPoliciesLoading, allPolicyNames, editGroupsLoading, allGroupNames,
+      showDetailDrawer, detailLoading, detailRole,
+      applyFilters, fetchRoles, resetAddForm,
+      openDetailDrawer, openEditDialog, resetEditForm, submitEditRole,
+      submitAddRole, deleteRole,
+    };
+  }
+}).use(ElementPlus).mount('#app');
+</script>
+</body>
+</html>
+{{end}}

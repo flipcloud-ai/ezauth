@@ -1,0 +1,94 @@
+server:
+  force_https: true
+  http2: true
+  hostname: "custom.example.com"
+  idle_timeout: 120
+  write_timeout: 600
+  read_timeout: 600
+  trust_forwarded_headers: false
+  static_prefix: "/assets"
+  app_name: "my-app"
+  hide_app_name: true
+  tls:
+    cert_path: "/custom/cert.crt"
+    key_path: "/custom/key.pem"
+    version: "TLS1.3"
+  pprof:
+    enabled: true
+    path: "/custom/pprof"
+  metrics:
+    enabled: true
+    path: "/custom/metrics"
+    port: 9095
+    host: "10.0.0.1"
+  portal:
+    enabled: true
+auth:
+  jwt:
+    signingmethod: "hs512"
+    key_path: "/custom/jwt"
+    cookie_expire: 48h
+  session:
+    refresh_period: 30m
+    cookie:
+      session_cookie_minimal: true
+      cookie_name: "my_session"
+      cookie_path: "/app"
+      cookie_expire: 48h
+      cookie_refresh: 1h
+      cookie_secure: true
+      cookie_httponly: false
+      cookie_samesite: "strict"
+    csrf:
+      enabled: true
+      cookie_name: "my_csrf"
+      request_header: "X-My-CSRF"
+      cookie_max_age: 6h
+  proxy:
+    enabled: false
+    json_response: true
+    prefix: "/proxy"
+  login_rate_limit:
+    enabled: true
+    ip_limit: 50
+    username_limit: 10
+    window: 2m
+    block_duration: 30m
+    count_mode: "all"
+  oauth_rate_limit:
+    ip_limit: 30
+    username_limit: 8
+    window: 3m
+    block_duration: 45m
+    count_mode: "all"
+  opaque_token:
+    prefix: "custom_"
+  provider_cache:
+    size: 100
+    shards: 32
+    refresh_interval: 5m
+access:
+  system_admin_group: "admin-group"
+  rbac:
+    enabled: true
+  bootstrap:
+    secret_file: "/opt/secrets/root"
+audit:
+  enabled: false
+  buffer_size: 1000
+  flush_interval: 10m
+  max_file_size: 1000000
+cache:
+  memory:
+    size: "500m"
+    ttl: 10m
+    shards: 32
+  redis:
+    addr: "redis:6379"
+    db: 1
+    ttl: 30m
+    prefix: "custom::"
+database:
+  skip_init: true
+  ssl:
+    mode: "verify-full"

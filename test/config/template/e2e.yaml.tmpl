@@ -1,0 +1,125 @@
+log:
+  level: info
+
+server:
+  hostname: {{ .Server.Hostname }}
+  port: {{ .Server.Port }}
+  auth_prefix: {{ .Server.AuthPrefix }}
+  static_prefix: {{ .Server.StaticPrefix }}
+  debug: true
+{{- if .Server.Portal.Enabled }}
+  portal:
+    enabled: true
+{{- end }}
+{{- if .Server.Upstream }}
+  upstream: {{ urlStr .Server.Upstream }}
+{{- end }}
+{{- if .Server.TLS.Enabled }}
+  tls:
+    enabled: true
+    cert_path: {{ .Server.TLS.CertPath }}
+    key_path: {{ .Server.TLS.KeyPath }}
+{{- end }}
+{{- if .Server.Pprof.Enabled }}
+  pprof:
+    enabled: true
+{{- end }}
+{{- if .Server.Metrics.Enabled }}
+  metrics:
+    enabled: true
+    path: {{ .Server.Metrics.Path }}
+    port: {{ .Server.Metrics.Port }}
+    host: {{ .Server.Metrics.Host }}
+{{- end }}
+
+{{- if .Database.Driver }}
+database:
+  driver: {{ .Database.Driver }}
+  hostname: {{ .Database.Hostname }}
+  port: {{ .Database.Port }}
+  database_name: {{ .Database.Name }}
+  user: {{ .Database.User }}
+  password: {{ .Database.Password }}
+  ssl:
+    mode: {{ .Database.SSL.Mode }}
+  connect_timeout: {{ .Database.ConnectTimeout }}
+{{- end }}
+
+{{- if .Auth.JWT.SigningMethod }}
+auth:
+  jwt:
+    signingmethod: {{ .Auth.JWT.SigningMethod }}
+    secret_key: {{ .Auth.JWT.SecretKey }}
+  session:
+    cookie:
+      cookie_name: {{ .Auth.Session.Cookie.Name }}
+      cookie_secret: {{ .Auth.Session.Cookie.Secret }}
+      cookie_path: {{ .Auth.Session.Cookie.Path }}
+      cookie_httponly: {{ .Auth.Session.Cookie.HTTPOnly }}
+      cookie_secure: {{ .Auth.Session.Cookie.Secure }}
+{{- if .Auth.Session.CSRF.Enabled }}
+    csrf:
+      enabled: true
+      trusted_origins:
+{{- range .Auth.Session.CSRF.TrustedOrigins }}
+      - {{ . }}
+{{- end }}
+{{- end }}
+{{- if .Auth.Static }}
+  static:
+{{- range .Auth.Static }}
+  - user: {{ .User }}
+    password: {{ .Password }}
+{{- end }}
+{{- end }}
+{{- if .Auth.Provider }}
+  providers:
+{{- range .Auth.Provider }}
+  - name: {{ .ProviderName }}
+    type: {{ .Type }}
+    client_id: {{ .ClientID }}
+    client_secret: {{ .ClientSecret }}
+{{- if .RedirectURL }}
+    redirect_url: {{ urlStr .RedirectURL }}
+{{- end }}
+    scopes: {{ .Scope }}
+    user_claim: {{ .UserClaim }}
+{{- if .OIDCConfig.Issuer }}
+    issuer: {{ urlStr .OIDCConfig.Issuer }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if .Auth.ProviderCache.Size }}
+  provider_cache:
+    size: {{ .Auth.ProviderCache.Size }}
+{{- if .Auth.ProviderCache.RefreshInterval }}
+    refresh_interval: {{ .Auth.ProviderCache.RefreshInterval }}
+{{- end }}
+{{- end }}
+{{- if .Auth.LoginRateLimit.Enabled }}
+  login_rate_limit:
+    enabled: true
+    ip_limit: {{ .Auth.LoginRateLimit.IPLimit }}
+    username_limit: {{ .Auth.LoginRateLimit.UsernameLimit }}
+    window: {{ .Auth.LoginRateLimit.Window }}
+    block_duration: {{ .Auth.LoginRateLimit.BlockDuration }}
+    count_mode: {{ .Auth.LoginRateLimit.CountMode }}
+{{- end }}
+{{- end }}
+
+{{- if .Access.Bootstrap.SecretFile }}
+access:
+  system_admin_group: {{ .Access.SystemAdminGroup }}
+  bootstrap:
+    secret_file: {{ .Access.Bootstrap.SecretFile }}
+  rbac:
+    enabled: {{ .Access.RBAC.Enabled }}
+{{- end }}
+
+{{- if .Cache.Memory.Size }}
+cache:
+  memory:
+    size: {{ .Cache.Memory.Size }}
+    shards: {{ .Cache.Memory.Shards }}
+    ttl: {{ .Cache.Memory.TTL }}
+{{- end }}

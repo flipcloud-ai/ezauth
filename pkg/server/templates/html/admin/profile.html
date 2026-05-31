@@ -1,0 +1,160 @@
+{{define "admin/profile.html"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{if and .AppName (not .HideAppName)}}{{.AppName}} — {{end}}Profile</title>
+  <link rel="icon" type="image/svg+xml" href="{{.LogoURL}}">
+  <script src="{{.StaticPrefix}}/vendor/vue.global.prod.js"></script>
+  <link rel="stylesheet" href="{{.StaticPrefix}}/vendor/element-plus.css" />
+  <script src="{{.StaticPrefix}}/vendor/element-plus.full.min.js"></script>
+  <link rel="stylesheet" href="{{.StaticPrefix}}/css/all.min.css" />
+  <link rel="stylesheet" href="{{.StaticPrefix}}/css/portal.css">
+  <script>const AUTH_PREFIX = "{{.AuthPrefix}}"; const CSRF_TOKEN = "{{.CSRFToken}}"; const PORTAL_USER = "{{.Username}}"; const PORTAL_INITIALS = "{{.UserInitials}}"; const PORTAL_DB_ENABLED = {{.DBEnabled}};</script>
+  <script src="{{.StaticPrefix}}/scripts/portal.js"></script>
+</head>
+<body>
+<div class="layout">
+  {{template "admin/nav.html" .}}
+  <div id="app" class="main-area"></div>
+</div>
+
+<script type="text/x-template" id="profile-tpl">
+  <header class="top-header">
+    <div class="breadcrumb">
+      <span>My Account</span>
+      <i class="fa fa-chevron-right"></i>
+      <span class="crumb-active">My Profile</span>
+    </div>
+    <div class="header-right" style="position:relative;">
+      <div class="header-username" v-text="portalUser"></div>
+      <div class="header-avatar" @click.stop="toggleProfile" v-text="portalInitials"></div>
+      <div v-if="showProfile" class="profile-popover" @click.stop>
+        <div class="profile-popover-user">
+          <div class="profile-popover-avatar" v-text="portalInitials"></div>
+          <div class="profile-popover-info">
+            <div class="profile-popover-name" v-text="portalUser || '—'"></div>
+          </div>
+        </div>
+        <div class="profile-popover-actions">
+          <a :href="authPrefix + '/portal/profile'" class="profile-popover-action">
+            <i class="fa fa-user"></i> My Profile
+          </a>
+          <a v-if="dbEnabled" :href="authPrefix + '/portal/tokens'" class="profile-popover-action">
+            <i class="fa fa-key"></i> Access Tokens
+          </a>
+          <a :href="authPrefix + '/logout'" class="profile-popover-action danger">
+            <i class="fa fa-right-from-bracket"></i> Sign out
+          </a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="page-content">
+    <div class="page-header-row">
+      <div class="page-heading">
+        <h1>My Profile</h1>
+        <p>Your account information.</p>
+      </div>
+    </div>
+
+    <div class="section-card" v-loading="loading">
+      <div v-if="error" style="padding:1rem;">
+        <el-alert :title="error" type="error" :closable="false" />
+      </div>
+      <div v-else-if="!loading && profile">
+        <el-descriptions :column="2" border>
+          <el-descriptions-item label="Username">
+            <span v-text="profile.username || '—'"></span>
+          </el-descriptions-item>
+          <el-descriptions-item label="Email">
+            <span v-text="profile.email || '—'"></span>
+          </el-descriptions-item>
+          <template v-if="profile.id_type !== 'oauth'">
+            <el-descriptions-item label="First Name">
+              <span v-text="profile.first_name || '—'"></span>
+            </el-descriptions-item>
+            <el-descriptions-item label="Last Name">
+              <span v-text="profile.last_name || '—'"></span>
+            </el-descriptions-item>
+            <el-descriptions-item label="Mobile Number" v-if="profile.mobile_number">
+              <span v-text="profile.mobile_number"></span>
+            </el-descriptions-item>
+            <el-descriptions-item label="Birth Date" v-if="profile.birth_date && !profile.birth_date.startsWith('0001-')">
+              <span v-text="profile.birth_date.slice(0,10)"></span>
+            </el-descriptions-item>
+            <el-descriptions-item label="Street" v-if="profile.address && profile.address.street">
+              <span v-text="profile.address.street"></span>
+            </el-descriptions-item>
+            <el-descriptions-item label="City" v-if="profile.address && profile.address.city">
+              <span v-text="profile.address.city"></span>
+            </el-descriptions-item>
+            <el-descriptions-item label="State" v-if="profile.address && profile.address.state">
+              <span v-text="profile.address.state"></span>
+            </el-descriptions-item>
+            <el-descriptions-item label="Zip Code" v-if="profile.address && profile.address.zip_code">
+              <span v-text="profile.address.zip_code"></span>
+            </el-descriptions-item>
+            <el-descriptions-item label="Country" v-if="profile.address && profile.address.country">
+              <span v-text="profile.address.country"></span>
+            </el-descriptions-item>
+            <el-descriptions-item label="Last Login" v-if="profile.last_login">
+              <span v-text="fmtTime(profile.last_login)"></span>
+            </el-descriptions-item>
+            <el-descriptions-item label="Created At" v-if="profile.created_at">
+              <span v-text="fmtTime(profile.created_at)"></span>
+            </el-descriptions-item>
+          </template>
+
+        </el-descriptions>
+      </div>
+    </div>
+  </main>
+</script>
+
+<script>
+const { createApp, ref, onMounted } = Vue;
+createApp({
+  template: '#profile-tpl',
+  setup() {
+    const portalUser     = ref(PORTAL_USER);
+    const portalInitials = ref(PORTAL_INITIALS);
+    const authPrefix     = ref(AUTH_PREFIX);
+    const dbEnabled      = PORTAL_DB_ENABLED;
+    const { showProfile, toggleProfile } = useProfile();
+
+    const profile = ref(null);
+    const loading = ref(false);
+    const error   = ref('');
+
+    async function fetchProfile() {
+      loading.value = true;
+      error.value = '';
+      try {
+        const resp = await fetch(AUTH_PREFIX + '/me');
+        if (!resp.ok) {
+          const body = await resp.json().catch(() => ({}));
+          error.value = body.error || 'Failed to load profile (HTTP ' + resp.status + ')';
+          return;
+        }
+        const body = await resp.json();
+        profile.value = body.data;
+      } catch(e) {
+        error.value = e.message || 'Failed to load profile';
+      } finally {
+        loading.value = false;
+      }
+    }
+
+    onMounted(fetchProfile);
+
+    return { portalUser, portalInitials, authPrefix, dbEnabled, showProfile, toggleProfile,
+      profile, loading, error, fmtTime };
+  }
+}).use(ElementPlus).mount('#app');
+</script>
+</body>
+</html>
+{{end}}

@@ -1,0 +1,255 @@
+{{define "error.html"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>{{if and .AppName (not .HideAppName)}}{{.AppName}} — {{end}}{{.StatusCode}} {{.Title}}</title>
+  <link rel="icon" type="image/svg+xml" href="{{.LogoURL}}">
+  <!-- Element Plus CDN -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css" />
+  <script src="https://unpkg.com/element-plus/dist/index.full.min.js"></script>
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <style>
+    :root {
+      --el-color-primary: #F5956A;
+      --el-color-primary-light-3: #F8B08A;
+      --el-color-primary-light-5: #FBCAAA;
+      --el-color-primary-light-7: #FCDEC8;
+      --el-color-primary-light-8: #FDE9DC;
+      --el-color-primary-light-9: #FEF4EE;
+      --el-color-primary-dark-2: #E07845;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      min-height: 100vh;
+      background-color: #F4F5F0;
+      display: flex;
+      flex-direction: column;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    .page-wrapper {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+    }
+
+    .error-card {
+      background: #FFFFFF;
+      border-radius: 16px;
+      box-shadow: 0 4px 24px rgba(61, 35, 20, 0.10), 0 1px 4px rgba(61, 35, 20, 0.06);
+      width: 100%;
+      max-width: 600px;
+      padding: 3rem 2.5rem 2.5rem;
+      text-align: center;
+    }
+
+    .status-code {
+      font-size: 8rem;
+      font-weight: 700;
+      color: #FFBE98;
+      line-height: 1;
+      margin-bottom: 0.5rem;
+      letter-spacing: -0.02em;
+    }
+
+    .error-title {
+      font-size: 1.75rem;
+      font-weight: 600;
+      color: #2C1810;
+      margin-bottom: 0.75rem;
+    }
+
+    .error-message-text {
+      font-size: 1rem;
+      color: #8B6355;
+      margin-bottom: 1.75rem;
+      line-height: 1.6;
+    }
+
+    .more-info-card {
+      margin-bottom: 1.75rem;
+      text-align: left;
+      border-radius: 10px;
+      border: 1px solid #E8DDD8;
+    }
+
+    .more-info-card .el-collapse {
+      border: none;
+    }
+
+    .more-info-card .el-collapse-item__header {
+      background: transparent;
+      color: #2C1810;
+      font-weight: 500;
+      font-size: 0.9rem;
+      padding: 0 1rem;
+      border-bottom: 1px solid #E8DDD8;
+    }
+
+    .more-info-card .el-collapse-item__wrap {
+      border-bottom: none;
+    }
+
+    .more-info-card .el-collapse-item__content {
+      padding: 1rem;
+      color: #8B6355;
+      font-size: 0.875rem;
+      line-height: 1.6;
+    }
+
+    .info-row {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+      align-items: flex-start;
+    }
+
+    .info-label {
+      font-weight: 600;
+      color: #2C1810;
+      min-width: 90px;
+      flex-shrink: 0;
+    }
+
+    .info-value {
+      color: #8B6355;
+      word-break: break-all;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.82rem;
+    }
+
+    .action-row {
+      display: flex;
+      gap: 0.875rem;
+      justify-content: center;
+      margin-top: 0.5rem;
+    }
+
+    .action-row .el-button {
+      border-radius: 8px;
+      height: 42px;
+      min-width: 130px;
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+
+    .btn-back {
+      color: #8B6355 !important;
+      border-color: #E8DDD8 !important;
+      background: #FFFFFF !important;
+    }
+
+    .btn-back:hover {
+      border-color: #F5956A !important;
+      color: #F5956A !important;
+    }
+
+    .btn-signin {
+      background-color: #F5956A !important;
+      border-color: #F5956A !important;
+      color: #fff !important;
+    }
+
+    .btn-signin:hover {
+      background-color: #E07845 !important;
+      border-color: #E07845 !important;
+    }
+
+    .page-footer {
+      text-align: center;
+      padding: 1.25rem 1rem;
+      font-size: 0.78rem;
+      color: #8B6355;
+    }
+
+    .page-footer a {
+      color: #8B6355;
+      text-decoration: underline;
+    }
+
+    .page-footer a:hover {
+      color: #F5956A;
+    }
+  </style>
+</head>
+<body>
+  <div id="app" class="page-wrapper">
+    <div class="error-card">
+
+      <div class="status-code">{{.StatusCode}}</div>
+      <div class="error-title">{{.Title}}</div>
+
+      {{ if .Message }}
+      <div class="error-message-text">{{.Message}}</div>
+      {{ end }}
+
+      {{ if or .Message .RequestID }}
+      <div class="more-info-card">
+        <el-collapse>
+          <el-collapse-item title="More Info" name="1">
+            {{ if .RequestID }}
+            <div class="info-row">
+              <span class="info-label">Request ID</span>
+              <span class="info-value">{{.RequestID}}</span>
+            </div>
+            {{ end }}
+            {{ if .Message }}
+            <div class="info-row">
+              <span class="info-label">Details</span>
+              <span class="info-value">{{.Message}}</span>
+            </div>
+            {{ end }}
+          </el-collapse-item>
+        </el-collapse>
+      </div>
+      {{ end }}
+
+      {{ if .Redirect }}
+      <div class="action-row">
+        <form method="GET" action="{{.Redirect}}" style="display:inline;">
+          <el-button class="btn-back" native-type="submit">
+            <i class="fa fa-arrow-left" style="margin-right: 6px;"></i>Go Back
+          </el-button>
+        </form>
+        <form method="GET" action="{{.AuthPrefix}}/sign_in" style="display:inline;">
+          <input type="hidden" name="rd" value="{{.Redirect}}">
+          <el-button type="primary" class="btn-signin" native-type="submit">
+            <i class="fa fa-right-to-bracket" style="margin-right: 6px;"></i>Sign In
+          </el-button>
+        </form>
+      </div>
+      {{ end }}
+
+    </div>
+  </div>
+
+  <footer class="page-footer">
+    {{ if eq .Footer "-" }}
+    {{ else if eq .Footer ""}}
+    <p>Secured with <a href="https://github.com/flipcloud-ai/ezauth">ezauth</a> version {{.Version}}</p>
+    {{ else }}
+    <p>{{.Footer}}</p>
+    {{ end }}
+  </footer>
+
+  <script>
+    const { createApp } = Vue;
+    const app = createApp({});
+    app.use(ElementPlus);
+    app.mount('#app');
+  </script>
+</body>
+</html>
+{{end}}

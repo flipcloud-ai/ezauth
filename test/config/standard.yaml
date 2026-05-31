@@ -1,0 +1,11 @@
+server:
+  debug: true
+auth:
+  jwt:
+    signingmethod: hs512
+    secret_key: test-jwt-secret-key-for-32bytes!!
+  static:
+  - user: test
+    password: test1234
+  - user: admin
+    password: password

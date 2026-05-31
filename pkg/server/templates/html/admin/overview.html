@@ -1,0 +1,80 @@
+{{define "admin/overview.html"}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{if and .AppName (not .HideAppName)}}{{.AppName}} — {{end}}Admin — Overview</title>
+  <link rel="icon" type="image/svg+xml" href="{{.LogoURL}}">
+  <script src="{{.StaticPrefix}}/vendor/vue.global.prod.js"></script>
+  <link rel="stylesheet" href="{{.StaticPrefix}}/vendor/element-plus.css" />
+  <script src="{{.StaticPrefix}}/vendor/element-plus.full.min.js"></script>
+  <link rel="stylesheet" href="{{.StaticPrefix}}/css/all.min.css" />
+  <link rel="stylesheet" href="{{.StaticPrefix}}/css/portal.css">
+  <script>const AUTH_PREFIX = "{{.AuthPrefix}}"; const CSRF_TOKEN = "{{.CSRFToken}}"; const PORTAL_USER = "{{.Username}}"; const PORTAL_INITIALS = "{{.UserInitials}}"; const PORTAL_DB_ENABLED = {{.DBEnabled}};</script>
+  <script src="{{.StaticPrefix}}/scripts/portal.js"></script>
+</head>
+<body>
+<div class="layout">
+  {{template "admin/nav.html" .}}
+  <div id="app" class="main-area"></div>
+</div>
+
+<script type="text/x-template" id="overview-tpl">
+  <header class="top-header">
+    <div class="breadcrumb">
+      <span>Admin</span>
+      <i class="fa fa-chevron-right"></i>
+      <span class="crumb-active">Overview</span>
+    </div>
+    <div class="header-right" style="position:relative;">
+      <div class="header-username" v-text="portalUser"></div>
+      <div class="header-avatar" @click.stop="toggleProfile" v-text="portalInitials"></div>
+      <div v-if="showProfile" class="profile-popover" @click.stop>
+        <div class="profile-popover-user">
+          <div class="profile-popover-avatar" v-text="portalInitials"></div>
+          <div class="profile-popover-info">
+            <div class="profile-popover-name" v-text="portalUser || '—'"></div>
+          </div>
+        </div>
+        <div class="profile-popover-actions">
+          <a :href="authPrefix + '/portal/profile'" class="profile-popover-action">
+            <i class="fa fa-user"></i> My Profile
+          </a>
+          <a v-if="dbEnabled" :href="authPrefix + '/portal/tokens'" class="profile-popover-action">
+            <i class="fa fa-key"></i> Access Tokens
+          </a>
+          <a :href="authPrefix + '/logout'" class="profile-popover-action danger">
+            <i class="fa fa-right-from-bracket"></i> Sign out
+          </a>
+        </div>
+      </div>
+    </div>
+  </header>
+  <main class="page-content">
+    <div class="page-header-row">
+      <div class="page-heading">
+        <h1>Welcome back<span v-if="portalUser">, <span v-text="portalUser"></span></span></h1>
+        <p>Here's what's happening with your auth gateway today.</p>
+      </div>
+    </div>
+  </main>
+</script>
+
+<script>
+const { createApp, ref } = Vue;
+createApp({
+  template: '#overview-tpl',
+  setup() {
+    const portalUser     = ref(PORTAL_USER);
+    const portalInitials = ref(PORTAL_INITIALS);
+    const authPrefix     = ref(AUTH_PREFIX);
+    const dbEnabled      = PORTAL_DB_ENABLED;
+    const { showProfile, toggleProfile } = useProfile();
+    return { portalUser, portalInitials, authPrefix, dbEnabled, showProfile, toggleProfile };
+  }
+}).use(ElementPlus).mount('#app');
+</script>
+</body>
+</html>
+{{end}}

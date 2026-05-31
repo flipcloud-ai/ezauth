@@ -1,0 +1,109 @@
+{{define "admin/nav.html"}}
+<button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">
+  <i class="fa fa-bars"></i>
+</button>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    {{.LogoData}}
+    {{if not .HideAppName}}<div>
+      <div class="brand-name">{{if .AppName}}{{.AppName}}{{else}}ezauth{{end}}</div>
+      <div class="brand-tagline">Auth Gateway</div>
+    </div>{{end}}
+  </div>
+  <nav class="sidebar-nav">
+    <a href="{{.AuthPrefix}}/portal/overview" class="nav-item{{if eq .ActivePage "overview"}} active{{end}}">
+      <i class="fa fa-home"></i><span>Overview</span>
+    </a>
+
+    <!-- L1: Access -->
+    <div class="nav-item nav-l1{{if or (eq .ActivePage "users") (eq .ActivePage "groups") (eq .ActivePage "roles") (eq .ActivePage "policies")}} expanded active-parent{{end}}"
+      id="nav-access-toggle">
+      <i class="fa fa-lock"></i><span>Access</span>
+      <i class="fa fa-chevron-right nav-l1-arrow" style="margin-left:auto;font-size:0.65rem;"></i>
+    </div>
+    <div class="nav-l2-group{{if or (eq .ActivePage "users") (eq .ActivePage "groups") (eq .ActivePage "roles") (eq .ActivePage "policies")}} open{{end}}"
+      id="nav-access-sub">
+      <a href="{{.AuthPrefix}}/portal/users" class="nav-item nav-l2{{if eq .ActivePage "users"}} active{{end}}">
+        <i class="fa fa-users"></i><span>Users</span>
+      </a>
+      <a href="{{.AuthPrefix}}/portal/groups" class="nav-item nav-l2{{if eq .ActivePage "groups"}} active{{end}}">
+        <i class="fa fa-layer-group"></i><span>Groups</span>
+      </a>
+      {{if .RBACEnabled}}<a href="{{.AuthPrefix}}/portal/roles" class="nav-item nav-l2{{if eq .ActivePage "roles"}} active{{end}}">
+        <i class="fa fa-shield-halved"></i><span>Roles</span>
+      </a>
+      <a href="{{.AuthPrefix}}/portal/policies" class="nav-item nav-l2{{if eq .ActivePage "policies"}} active{{end}}">
+        <i class="fa fa-file-shield"></i><span>Policies</span>
+      </a>{{end}}
+    </div>
+
+    <a href="{{.AuthPrefix}}/portal/providers" class="nav-item{{if eq .ActivePage "providers"}} active{{end}}">
+      <i class="fa fa-plug"></i><span>Providers</span>
+    </a>
+
+    {{if .AuditEnabled}}
+    <!-- L1: System -->
+    <div class="nav-item nav-l1{{if eq .ActivePage "audit"}} expanded active-parent{{end}}"
+      id="nav-sys-toggle">
+      <i class="fa fa-server"></i><span>System</span>
+      <i class="fa fa-chevron-right nav-l1-arrow" style="margin-left:auto;font-size:0.65rem;"></i>
+    </div>
+    <div class="nav-l2-group{{if eq .ActivePage "audit"}} open{{end}}"
+      id="nav-sys-sub">
+      <a href="{{.AuthPrefix}}/portal/audit" class="nav-item nav-l2{{if eq .ActivePage "audit"}} active{{end}}">
+        <i class="fa fa-scroll"></i><span>Audit Log</span>
+      </a>
+    </div>
+    {{end}}
+  </nav>
+  <div class="sidebar-footer">
+    <div class="sidebar-user">
+      <div class="sidebar-user-avatar">{{.UserInitials}}</div>
+      <div class="sidebar-user-info">
+        <div class="sidebar-user-name">{{if .Username}}{{.Username}}{{else}}—{{end}}</div>
+        <a href="{{.AuthPrefix}}/logout" class="sidebar-logout">Sign out</a>
+      </div>
+    </div>
+  </div>
+</aside>
+<script>
+(function() {
+  var sidebar  = document.getElementById('sidebar');
+  var overlay  = document.getElementById('sidebarOverlay');
+  var toggle   = document.getElementById('menuToggle');
+  var icon     = toggle.querySelector('i');
+
+  function openSidebar() {
+    sidebar.classList.add('open');
+    overlay.classList.add('visible');
+    icon.className = 'fa fa-xmark';
+  }
+  function closeSidebar() {
+    sidebar.classList.remove('open');
+    overlay.classList.remove('visible');
+    icon.className = 'fa fa-bars';
+  }
+  toggle.addEventListener('click', function() {
+    sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+  });
+  overlay.addEventListener('click', closeSidebar);
+  sidebar.querySelectorAll('a.nav-item').forEach(function(a) {
+    a.addEventListener('click', function() { if (window.innerWidth <= 768) closeSidebar(); });
+  });
+
+  function setupL1(toggleId, subId) {
+    var t = document.getElementById(toggleId);
+    var s = document.getElementById(subId);
+    if (t && s) {
+      t.addEventListener('click', function() {
+        var open = s.classList.toggle('open');
+        t.classList.toggle('expanded', open);
+      });
+    }
+  }
+  setupL1('nav-access-toggle', 'nav-access-sub');
+  setupL1('nav-sys-toggle',    'nav-sys-sub');
+})();
+</script>
+{{end}}

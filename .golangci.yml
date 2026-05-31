@@ -1,0 +1,35 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - ineffassign
+    - gosec
+    - revive
+    - misspell
+    - unparam
+    - contextcheck
+    - wrapcheck
+    - bodyclose
+    - noctx
+  settings:
+    revive:
+      rules:
+        - name: exported
+          severity: warning
+    wrapcheck:
+      ignore-package-globs:
+        - github.com/flipcloud-ai/ezauth/*
+    gosec:
+      excludes:
+        - G401
+        - G501
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - wrapcheck
+          - gosec

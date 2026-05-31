@@ -1,0 +1,22 @@
+server:
+  force_https: true
+  debug: true
+  tls:
+    enabled: true
+auth:
+  providers:
+  - name: test
+    type: google
+    issuer: https://www.google.com
+    redirect_url: http://127.0.0.1:4180/oauth2/callback
+  - name: test2
+    issuer: https://dev-z3tqqsmunxppeufg.us.auth0.com
+    redirect_url: https://127.0.0.1:8443/oauth2/callback
+  jwt:
+    signingmethod: hs512
+    secret_key: test-jwt-secret-key-for-32bytes!!
+  static:
+  - user: test
+    password: test1234
+  - user: admin
+    password: password

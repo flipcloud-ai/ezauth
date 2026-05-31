@@ -1,0 +1,58 @@
+image:
+  repository: ghcr.io/flipcloud-ai/ezauth-dev
+  pullPolicy: Always
+  pullSecrets:
+    - name: ghcr-pull-secret
+
+replicaCount: 1
+
+serviceAccount:
+  annotations:
+    # terraform output -raw ezauth_irsa_arn  (projects/ezauth/aws/dev)
+    eks.amazonaws.com/role-arn: "arn:aws:iam::851725356780:role/ezauth-dev"
+
+gateway:
+  enabled: true
+  name: external
+  namespace: nginx-gateway
+  listenerSection: https
+  hostname: ezauth.dev.flipcloud.ai
+
+config:
+  access:
+    bootstrap:
+      secret_file: /opt/ezauth/bootstrap/root_secret
+  server:
+    port: 8088
+  cache:
+    redis:
+      tls: true
+  auth:
+    jwt:
+      signingmethod: hs512
+      secret_key:
+        type: file
+        path: /opt/ezauth/secrets/jwt-secret
+    session:
+      cookie:
+        cookie_name: _ez_proxy
+        cookie_secret:
+          type: file
+          path: /opt/ezauth/secrets/cookie-secret
+        cookie_path: /
+        cookie_httponly: true
+        cookie_secure: true
+      csrf:
+        cookie_secret:
+          type: file
+          path: /opt/ezauth/secrets/csrf-secret
+  database:
+    driver: pgx
+    port: 5432
+    database_name: ezauth
+    user: ezauth_admin
+    password:
+      type: file
+      path: /opt/ezauth/secrets/database-password
+    ssl:
+      mode: require

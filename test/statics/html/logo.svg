@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="6 0 188 228" fill="none">
+  <title>ezauth</title>
+
+  <!-- Shield outer — Baltic Sea fill, Nimbus Cloud stroke -->
+  <path d="M100 8
+           L186 44
+           L186 112
+           C186 160 148 196 100 220
+           C52 196 14 160 14 112
+           L14 44
+           Z"
+        fill="#1E3448"
+        stroke="#8DA0AE"
+        stroke-width="5"
+        stroke-linejoin="round"/>
+
+  <!-- Shield inner inset — Ice Melt fill -->
+  <path d="M100 26
+           L170 56
+           L170 112
+           C170 150 138 182 100 202
+           C62 182 30 150 30 112
+           L30 56
+           Z"
+        fill="#C8E9F4"/>
+
+  <g>
+    <!-- diagonal top-right → bottom-left -->
+    <line x1="122" y1="96"  x2="80"  y2="140"  stroke="#1E3448" stroke-width="18" stroke-linecap="round"/>
+    <!-- bottom bar -->
+    <line x1="80" y1="140" x2="122" y2="140" stroke="#1E3448" stroke-width="18" stroke-linecap="round"/>
+    <!-- dot -->
+    <circle cx="86" cy="96" r="13" fill="#8DA0AE" stroke="#D4AF78" stroke-width="3"/>
+  </g>
+</svg>

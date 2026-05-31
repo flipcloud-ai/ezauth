@@ -1,0 +1,1660 @@
+basePath: /
+definitions:
+  config.ProviderConfig:
+    properties:
+      admin_group:
+        type: string
+      allowed_groups:
+        items:
+          type: string
+        type: array
+      claim_from_profile:
+        type: boolean
+      client_id:
+        type: string
+      client_secret:
+        type: string
+      created_at:
+        type: string
+      device_auth_url:
+        $ref: '#/definitions/url.URL'
+      enabled:
+        type: boolean
+      login_parameters:
+        additionalProperties:
+          items:
+            type: string
+          type: array
+        type: object
+      provider_name:
+        type: string
+      redirect_allowed_domains:
+        items:
+          type: string
+        type: array
+      redirect_url:
+        $ref: '#/definitions/url.URL'
+      scopes:
+        type: string
+      skip_nonce:
+        type: boolean
+      type:
+        default: oauth2
+        type: string
+      updated_at:
+        type: string
+      user_claim:
+        type: string
+      validate_url:
+        $ref: '#/definitions/url.URL'
+    type: object
+  datatypes.URL:
+    properties:
+      forceQuery:
+        description: append a query ('?') even if RawQuery is empty
+        type: boolean
+      fragment:
+        description: fragment for references, without '#'
+        type: string
+      host:
+        description: host or host:port (see Hostname and Port methods)
+        type: string
+      omitHost:
+        description: do not emit empty host (authority)
+        type: boolean
+      opaque:
+        description: encoded opaque data
+        type: string
+      path:
+        description: path (relative paths may omit leading slash)
+        type: string
+      rawFragment:
+        description: encoded fragment hint (see EscapedFragment method)
+        type: string
+      rawPath:
+        description: encoded path hint (see EscapedPath method)
+        type: string
+      rawQuery:
+        description: encoded query values, without '?'
+        type: string
+      scheme:
+        type: string
+      user:
+        allOf:
+        - $ref: '#/definitions/url.Userinfo'
+        description: username and password information
+    type: object
+  dto.CreateGroupRequest:
+    description: Request body for creating a group. The name field is required.
+    properties:
+      name:
+        type: string
+    type: object
+  dto.CreatePATRequest:
+    description: Token creation request. expires_at is required and must be within
+      365 days from now.
+    properties:
+      expires_at:
+        example: "2026-12-31T23:59:59Z"
+        format: date-time
+        type: string
+      name:
+        example: ci-pipeline
+        type: string
+    type: object
+  dto.CreatePATResponse:
+    properties:
+      created_at:
+        type: string
+      expires_at:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      token:
+        type: string
+    type: object
+  dto.CreateUserRequest:
+    description: Request body for creating a user. Username and password are required;
+      all other fields are optional (email is strongly recommended).
+    properties:
+      address:
+        $ref: '#/definitions/models.AddressDB'
+      birth_date:
+        type: string
+      email:
+        type: string
+      first_name:
+        type: string
+      last_name:
+        type: string
+      mobile_number:
+        type: string
+      password:
+        type: string
+      username:
+        type: string
+    type: object
+  dto.DeleteUserRequest:
+    description: Request body for deleting a user. The id field is required.
+    properties:
+      id:
+        type: string
+    type: object
+  dto.ErrorResponse:
+    description: Unified error response with numeric code and human-readable message.
+    properties:
+      authenticated:
+        type: boolean
+      code:
+        type: integer
+      error:
+        type: string
+    type: object
+  dto.GroupListItem:
+    description: Summary row for a group in list views. Includes id and name.
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+    type: object
+  dto.GroupListResponse:
+    description: Paginated list of groups with offset, limit, and total count metadata.
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/dto.GroupListItem'
+        type: array
+      limit:
+        type: integer
+      offset:
+        type: integer
+      total:
+        type: integer
+    type: object
+  dto.GroupMemberRequest:
+    description: Request body for managing group membership. The users field is a
+      list of user UUIDs.
+    properties:
+      users:
+        items:
+          type: string
+        type: array
+    type: object
+  dto.GroupResponse:
+    description: Full group details including member users, assigned roles, and creation
+      timestamp.
+    properties:
+      created_at:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+      users:
+        items:
+          $ref: '#/definitions/dto.GroupUserItem'
+        type: array
+    type: object
+  dto.GroupRoleRequest:
+    description: Request body for granting or revoking group roles. The roles field
+      is a list of role names.
+    properties:
+      roles:
+        items:
+          type: string
+        type: array
+    type: object
+  dto.GroupUserItem:
+    description: Minimal user reference returned inside group details. Contains id
+      and username.
+    properties:
+      id:
+        type: string
+      username:
+        type: string
+    type: object
+  dto.PATListItem:
+    properties:
+      created_at:
+        type: string
+      expires_at:
+        type: string
+      id:
+        type: string
+      last_used_at:
+        type: string
+      name:
+        type: string
+    type: object
+  dto.ResetPasswordRequest:
+    description: Request body for changing a user's password. The password field is
+      required.
+    properties:
+      password:
+        type: string
+    type: object
+  dto.UpdateGroupRequest:
+    description: Request body for updating a group. The name field is the new group
+      name.
+    properties:
+      name:
+        type: string
+    type: object
+  dto.UpdateProviderRequest:
+    description: Request body for updating a provider configuration. All fields are
+      optional; only provided fields are updated. provider_name and type cannot be
+      changed via this API.
+    properties:
+      admin_group:
+        type: string
+      allowed_groups:
+        items:
+          type: string
+        type: array
+      authorization_endpoint:
+        type: string
+      claims_from_profile:
+        type: boolean
+      client_id:
+        type: string
+      client_secret:
+        type: string
+      code_challenge_methods_supported:
+        items:
+          type: string
+        type: array
+      device_auth_url:
+        type: string
+      enabled:
+        type: boolean
+      id_token_signing_alg_values_supported:
+        items:
+          type: string
+        type: array
+      issuer:
+        type: string
+      jwks_uri:
+        type: string
+      login_parameters:
+        additionalProperties:
+          items:
+            type: string
+          type: array
+        type: object
+      protected_resource:
+        type: string
+      redirect_url:
+        type: string
+      revocation_endpoint:
+        type: string
+      scope:
+        type: string
+      skip_nonce:
+        type: boolean
+      token_endpoint:
+        type: string
+      user_claim:
+        type: string
+      userinfo_endpoint:
+        type: string
+      validate_url:
+        type: string
+    type: object
+  dto.UpdateUserRequest:
+    description: Request body for updating a user. The id field is required; all other
+      fields are optional and only provided fields are updated.
+    properties:
+      address:
+        $ref: '#/definitions/models.AddressDB'
+      email:
+        type: string
+      first_name:
+        type: string
+      id:
+        type: string
+      last_name:
+        type: string
+      mobile_number:
+        type: string
+      username:
+        type: string
+    type: object
+  dto.UserListItem:
+    description: Summary row for a user in list views. Includes the most relevant
+      fields for browsing users.
+    properties:
+      active:
+        type: boolean
+      country:
+        type: string
+      created_at:
+        type: string
+      email:
+        type: string
+      first_name:
+        type: string
+      groups:
+        items:
+          type: string
+        type: array
+      id:
+        type: string
+      last_login:
+        type: string
+      last_name:
+        type: string
+      mobile_number:
+        type: string
+      updated_at:
+        type: string
+      username:
+        type: string
+    type: object
+  dto.UserResponse:
+    description: Full user profile including roles, groups, and address details.
+    properties:
+      active:
+        type: boolean
+      address:
+        $ref: '#/definitions/models.AddressDB'
+      birth_date:
+        type: string
+      created_at:
+        type: string
+      email:
+        type: string
+      first_name:
+        type: string
+      groups:
+        items:
+          type: string
+        type: array
+      id:
+        type: string
+      id_type:
+        type: string
+      last_login:
+        type: string
+      last_name:
+        type: string
+      mobile_number:
+        type: string
+      roles:
+        items:
+          type: string
+        type: array
+      updated_at:
+        type: string
+      username:
+        type: string
+    type: object
+  dto.UserRoleRequest:
+    description: Request body for granting or revoking roles. The roles field is a
+      list of role names.
+    properties:
+      roles:
+        items:
+          type: string
+        type: array
+    type: object
+  dto.VerifyResponse:
+    properties:
+      authenticated:
+        type: boolean
+      email:
+        type: string
+      groups:
+        items:
+          type: string
+        type: array
+      id_type:
+        type: string
+      subject:
+        type: string
+      user:
+        type: string
+    type: object
+  models.AddressDB:
+    properties:
+      city:
+        type: string
+      country:
+        type: string
+      state:
+        type: string
+      street:
+        type: string
+      zip_code:
+        type: string
+    type: object
+  models.LoginParameters:
+    additionalProperties:
+      items:
+        type: string
+      type: array
+    type: object
+  models.ProviderDB:
+    properties:
+      admin_group:
+        type: string
+      allowed_groups:
+        items:
+          type: string
+        type: array
+      authorization_endpoint:
+        $ref: '#/definitions/datatypes.URL'
+      claims_from_profile:
+        type: boolean
+      client_id:
+        type: string
+      client_secret:
+        type: string
+      code_challenge_methods_supported:
+        items:
+          type: string
+        type: array
+      created_at:
+        type: string
+      device_auth_url:
+        $ref: '#/definitions/datatypes.URL'
+      enabled:
+        type: boolean
+      id_token_signing_alg_values_supported:
+        items:
+          type: string
+        type: array
+      issuer:
+        $ref: '#/definitions/datatypes.URL'
+      jwks_uri:
+        $ref: '#/definitions/datatypes.URL'
+      login_parameters:
+        $ref: '#/definitions/models.LoginParameters'
+      protected_resource:
+        $ref: '#/definitions/datatypes.URL'
+      provider_name:
+        type: string
+      redirect_url:
+        $ref: '#/definitions/datatypes.URL'
+      revocation_endpoint:
+        $ref: '#/definitions/datatypes.URL'
+      scope:
+        type: string
+      skip_nonce:
+        type: boolean
+      token_endpoint:
+        $ref: '#/definitions/datatypes.URL'
+      type:
+        type: string
+      updated_at:
+        type: string
+      user_claim:
+        type: string
+      userinfo_endpoint:
+        $ref: '#/definitions/datatypes.URL'
+      validate_url:
+        $ref: '#/definitions/datatypes.URL'
+    type: object
+  url.URL:
+    properties:
+      forceQuery:
+        description: append a query ('?') even if RawQuery is empty
+        type: boolean
+      fragment:
+        description: fragment for references, without '#'
+        type: string
+      host:
+        description: host or host:port (see Hostname and Port methods)
+        type: string
+      omitHost:
+        description: do not emit empty host (authority)
+        type: boolean
+      opaque:
+        description: encoded opaque data
+        type: string
+      path:
+        description: path (relative paths may omit leading slash)
+        type: string
+      rawFragment:
+        description: encoded fragment hint (see EscapedFragment method)
+        type: string
+      rawPath:
+        description: encoded path hint (see EscapedPath method)
+        type: string
+      rawQuery:
+        description: encoded query values, without '?'
+        type: string
+      scheme:
+        type: string
+      user:
+        allOf:
+        - $ref: '#/definitions/url.Userinfo'
+        description: username and password information
+    type: object
+  url.Userinfo:
+    type: object
+host: localhost:8080
+info:
+  contact:
+    name: EzAuth Maintainers
+    url: https://github.com/flipcloud-ai/ezauth
+  description: OAuth2 / OIDC authentication reverse proxy. Supports username/password
+    login, OIDC provider federation, session management, and admin CRUD for users,
+    groups, providers, and RBAC.
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: https://github.com/flipcloud-ai/ezauth
+  title: EzAuth API
+  version: 1.0.0
+paths:
+  /ezauth/callback:
+    get:
+      consumes:
+      - application/x-www-form-urlencoded
+      description: Completes the OAuth2 authorization flow. The IdP redirects the
+        browser here with authorization code and state. On success the user gets a
+        session cookie and is redirected to the app. In auth-only mode returns 200
+        JSON.
+      parameters:
+      - description: State parameter for CSRF protection
+        in: query
+        name: state
+        required: true
+        type: string
+      - description: Authorization code (authorization code flow)
+        in: query
+        name: code
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Auth-only mode success JSON
+          schema:
+            additionalProperties: true
+            type: object
+        "302":
+          description: Redirect to app (proxy mode)
+        "400":
+          description: Callback processing error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: OAuth2/OIDC callback handler
+      tags:
+      - Authentication
+  /ezauth/groups/:
+    get:
+      description: Returns a paginated list of all groups.
+      parameters:
+      - description: Page size (default 30)
+        in: query
+        name: limit
+        type: integer
+      - description: Offset (default 0)
+        in: query
+        name: offset
+        type: integer
+      - description: Page number (1-based)
+        in: query
+        name: page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Group list
+          schema:
+            $ref: '#/definitions/dto.GroupListResponse'
+        "400":
+          description: Invalid pagination params
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: List groups
+      tags:
+      - Group Management
+    post:
+      consumes:
+      - application/json
+      description: Creates a new group with the specified name.
+      parameters:
+      - description: Group name
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateGroupRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Group created
+        "400":
+          description: Invalid request body
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Duplicate group name
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Create a group
+      tags:
+      - Group Management
+  /ezauth/groups/{name}:
+    delete:
+      description: Permanently removes a group from the database.
+      parameters:
+      - description: Group name to delete
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Group deleted
+        "404":
+          description: Group not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Delete a group
+      tags:
+      - Group Management
+    get:
+      description: Returns group details including member users and assigned roles.
+      parameters:
+      - description: Group name
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Group details
+          schema:
+            $ref: '#/definitions/dto.GroupResponse'
+        "404":
+          description: Group not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Get a group by name
+      tags:
+      - Group Management
+    put:
+      consumes:
+      - application/json
+      description: Renames an existing group.
+      parameters:
+      - description: Current group name
+        in: path
+        name: name
+        required: true
+        type: string
+      - description: New group name
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateGroupRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Group updated
+        "400":
+          description: Invalid request body
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Group not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Update a group
+      tags:
+      - Group Management
+  /ezauth/groups/{name}/members/assign:
+    post:
+      consumes:
+      - application/json
+      description: Assigns one or more users to a group.
+      parameters:
+      - description: Group name
+        in: path
+        name: name
+        required: true
+        type: string
+      - description: User IDs to add
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.GroupMemberRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Members added
+        "400":
+          description: Missing parameters
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Group or user not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Add members to a group
+      tags:
+      - Group Management
+  /ezauth/groups/{name}/members/unassign:
+    delete:
+      consumes:
+      - application/json
+      description: Removes one or more users from a group.
+      parameters:
+      - description: Group name
+        in: path
+        name: name
+        required: true
+        type: string
+      - description: User IDs to remove
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.GroupMemberRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Members removed
+        "400":
+          description: Missing parameters
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Group or user not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Remove members from a group
+      tags:
+      - Group Management
+  /ezauth/groups/{name}/roles/assign:
+    post:
+      consumes:
+      - application/json
+      description: Grants roles to a group. All group members inherit these roles.
+      parameters:
+      - description: Group name
+        in: path
+        name: name
+        required: true
+        type: string
+      - description: Roles to assign
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.GroupRoleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Roles assigned
+        "400":
+          description: Missing parameters
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Group or role not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Assign roles to a group
+      tags:
+      - Group Management
+  /ezauth/groups/{name}/roles/unassign:
+    delete:
+      consumes:
+      - application/json
+      description: Revokes roles from a group.
+      parameters:
+      - description: Group name
+        in: path
+        name: name
+        required: true
+        type: string
+      - description: Roles to unassign
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.GroupRoleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Roles unassigned
+        "400":
+          description: Missing parameters
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Group or role not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Unassign roles from a group
+      tags:
+      - Group Management
+  /ezauth/login:
+    get:
+      consumes:
+      - application/x-www-form-urlencoded
+      description: GET returns the HTML login page with provider buttons and username/password
+        form. POST authenticates with username/password and creates a session cookie.
+        In proxy mode the client is redirected to the upstream; in auth-only mode
+        a 200 JSON/HTML success is returned.
+      parameters:
+      - description: Username (required for POST auth)
+        in: formData
+        name: username
+        type: string
+      - description: Password (required for POST auth)
+        in: formData
+        name: password
+        type: string
+      - description: Redirect target after successful login
+        in: query
+        name: redirect
+        type: string
+      produces:
+      - text/html
+      - application/json
+      responses:
+        "200":
+          description: Login page HTML (GET) or success (auth-only POST)
+          schema:
+            type: string
+        "302":
+          description: Redirect to upstream (proxy mode POST)
+          schema:
+            type: string
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Invalid credentials
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Authenticate user
+      tags:
+      - Authentication
+    post:
+      consumes:
+      - application/x-www-form-urlencoded
+      description: GET returns the HTML login page with provider buttons and username/password
+        form. POST authenticates with username/password and creates a session cookie.
+        In proxy mode the client is redirected to the upstream; in auth-only mode
+        a 200 JSON/HTML success is returned.
+      parameters:
+      - description: Username (required for POST auth)
+        in: formData
+        name: username
+        type: string
+      - description: Password (required for POST auth)
+        in: formData
+        name: password
+        type: string
+      - description: Redirect target after successful login
+        in: query
+        name: redirect
+        type: string
+      produces:
+      - text/html
+      - application/json
+      responses:
+        "200":
+          description: Login page HTML (GET) or success (auth-only POST)
+          schema:
+            type: string
+        "302":
+          description: Redirect to upstream (proxy mode POST)
+          schema:
+            type: string
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Invalid credentials
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Authenticate user
+      tags:
+      - Authentication
+  /ezauth/logout:
+    get:
+      description: Invalidates the session and clears the session cookie. For OIDC
+        sessions, attempts RFC 7009 upstream token revocation (best-effort). Returns
+        204 to API clients and redirects browsers to the login page.
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Session cleared successfully (API clients)
+        "302":
+          description: Redirect to login page (browsers)
+        "500":
+          description: Failed to clear session
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Log out and clear session
+      tags:
+      - Authentication
+    post:
+      description: Invalidates the session and clears the session cookie. For OIDC
+        sessions, attempts RFC 7009 upstream token revocation (best-effort). Returns
+        204 to API clients and redirects browsers to the login page.
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Session cleared successfully (API clients)
+        "302":
+          description: Redirect to login page (browsers)
+        "500":
+          description: Failed to clear session
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Log out and clear session
+      tags:
+      - Authentication
+  /ezauth/me:
+    get:
+      description: Returns the profile of the currently authenticated user. For OIDC
+        users the profile is built from the session; for DB users it is fetched from
+        the database.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User profile
+          schema:
+            $ref: '#/definitions/dto.UserResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Database not available or user not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Get current user profile
+      tags:
+      - Self-Service
+  /ezauth/me/tokens:
+    get:
+      description: Returns metadata for all PATs belonging to the currently authenticated
+        user. Token values are never returned.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Token list
+          schema:
+            items:
+              $ref: '#/definitions/dto.PATListItem'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Database not available
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: List my personal access tokens
+      tags:
+      - Self-Service
+    post:
+      consumes:
+      - application/json
+      description: Generates a new opaque token for the currently authenticated user.
+        OIDC users cannot create PATs. The plaintext token is returned once and never
+        stored.
+      parameters:
+      - description: Token creation request
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreatePATRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Token created
+          schema:
+            $ref: '#/definitions/dto.CreatePATResponse'
+        "400":
+          description: Invalid request or OIDC user
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Database not available
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Create a personal access token
+      tags:
+      - Self-Service
+  /ezauth/me/tokens/{id}:
+    delete:
+      description: Permanently deletes the specified token. The operation is irreversible.
+      parameters:
+      - description: Token UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: Token revoked
+        "400":
+          description: Missing token ID
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Token or database not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Revoke a personal access token
+      tags:
+      - Self-Service
+  /ezauth/provider/:
+    get:
+      description: Returns all OIDC/OAuth2 provider configurations from the database.
+      parameters:
+      - description: Max results (default 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Offset for pagination (default 0)
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Provider list
+          schema:
+            items:
+              $ref: '#/definitions/models.ProviderDB'
+            type: array
+        "404":
+          description: Database not available
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: List providers
+      tags:
+      - Provider Management
+    post:
+      consumes:
+      - application/json
+      description: Adds a new OIDC/OAuth2 provider configuration to the database.
+      parameters:
+      - description: Provider configuration
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/models.ProviderDB'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Provider created
+        "400":
+          description: Invalid request body
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Conflicts with a static provider
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Create a provider
+      tags:
+      - Provider Management
+  /ezauth/provider/{name}:
+    delete:
+      description: Removes an OIDC/OAuth2 provider from the database and clears it
+        from the cache.
+      parameters:
+      - description: Provider name to delete
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Provider deleted
+        "404":
+          description: Provider not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Delete a provider
+      tags:
+      - Provider Management
+    get:
+      description: Returns the OIDC/OAuth2 provider configuration.
+      parameters:
+      - description: Provider name
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Provider configuration
+          schema:
+            $ref: '#/definitions/config.ProviderConfig'
+        "404":
+          description: Provider not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Get a provider by name
+      tags:
+      - Provider Management
+    put:
+      consumes:
+      - application/json
+      description: Updates an existing OIDC/OAuth2 provider configuration in the database.
+        The provider name is fixed and cannot be changed via this API.
+      parameters:
+      - description: Provider name
+        in: path
+        name: name
+        required: true
+        type: string
+      - description: Updated provider fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateProviderRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Provider updated
+        "400":
+          description: Invalid request body
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: Provider not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Conflicts with a static provider
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Update a provider
+      tags:
+      - Provider Management
+  /ezauth/start:
+    get:
+      description: Redirects the browser to the identity provider's authorization
+        URL for the specified provider. If no provider query param is given, renders
+        the login page with an error.
+      parameters:
+      - description: Provider name to use for authentication
+        in: query
+        name: provider
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "302":
+          description: Redirect to IdP authorization URL
+        "400":
+          description: No provider found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Failed to get login URL
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Start OAuth2/OIDC login flow
+      tags:
+      - Authentication
+  /ezauth/users/:
+    delete:
+      consumes:
+      - application/json
+      description: Permanently removes a user from the database. The body must include
+        the user ID.
+      parameters:
+      - description: User ID to delete
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.DeleteUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User deleted
+        "400":
+          description: Missing user ID
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Delete a user
+      tags:
+      - User Management
+    get:
+      description: Returns a paginated list of all users.
+      parameters:
+      - description: Page size (default 30)
+        in: query
+        name: limit
+        type: integer
+      - description: Offset (default 0)
+        in: query
+        name: offset
+        type: integer
+      - description: Page number (1-based, alternative to offset)
+        in: query
+        name: page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of users
+          schema:
+            items:
+              $ref: '#/definitions/dto.UserListItem'
+            type: array
+        "400":
+          description: Invalid pagination params
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: List users
+      tags:
+      - User Management
+    post:
+      consumes:
+      - application/json
+      description: Creates a new user with the specified profile fields and password.
+      parameters:
+      - description: User details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.CreateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User created
+        "400":
+          description: Invalid request body
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "409":
+          description: Duplicate username/email
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Create a user
+      tags:
+      - User Management
+    put:
+      consumes:
+      - application/json
+      description: Updates profile fields for an existing user. The body must include
+        the user ID.
+      parameters:
+      - description: Updated user fields
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User updated
+        "400":
+          description: Invalid request body or user ID
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Update a user
+      tags:
+      - User Management
+  /ezauth/users/{uid}:
+    get:
+      description: Returns the full profile for a single user, including roles and
+        groups.
+      parameters:
+      - description: User UUID
+        in: path
+        name: uid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User profile
+          schema:
+            $ref: '#/definitions/dto.UserResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Get a user by ID
+      tags:
+      - User Management
+  /ezauth/users/{uid}/reset-password:
+    put:
+      consumes:
+      - application/json
+      description: Sets a new password for the specified user. Requires admin privileges.
+      parameters:
+      - description: User UUID
+        in: path
+        name: uid
+        required: true
+        type: string
+      - description: New password
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.ResetPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Password changed
+        "400":
+          description: Missing user ID or password
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Reset a user's password
+      tags:
+      - User Management
+  /ezauth/users/{uid}/roles/assign:
+    post:
+      consumes:
+      - application/json
+      description: Grants the specified roles to a user. Roles are referenced by name.
+      parameters:
+      - description: User UUID
+        in: path
+        name: uid
+        required: true
+        type: string
+      - description: Roles to assign
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UserRoleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Roles assigned
+        "400":
+          description: Missing parameters
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: User or role not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Assign roles to a user
+      tags:
+      - User Management
+  /ezauth/users/{uid}/roles/unassign:
+    delete:
+      consumes:
+      - application/json
+      description: Revokes the specified roles from a user.
+      parameters:
+      - description: User UUID
+        in: path
+        name: uid
+        required: true
+        type: string
+      - description: Roles to unassign
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UserRoleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Roles unassigned
+        "400":
+          description: Missing parameters
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "404":
+          description: User or role not found
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Unassign roles from a user
+      tags:
+      - User Management
+  /ezauth/verify:
+    get:
+      description: Returns the session status as JSON for external gateway auth_request
+        integration (nginx, Kong, Envoy). 200 with user profile when authenticated;
+        401 when not. Never returns HTML or redirect.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'Authenticated: returns user, subject, email, groups, id_type'
+          schema:
+            $ref: '#/definitions/dto.VerifyResponse'
+        "401":
+          description: 'Unauthenticated: returns {authenticated: false, error: ...}'
+          schema:
+            $ref: '#/definitions/dto.ErrorResponse'
+      summary: Verify session (gateway auth_request integration)
+      tags:
+      - Authentication
+  /healthz:
+    get:
+      description: Returns 200 OK with a plain-text message indicating the service
+        is healthy.
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: XW Proxy is Healthy
+          schema:
+            type: string
+      summary: Health check endpoint
+      tags:
+      - System
+  /robots.txt:
+    get:
+      description: Returns the robots.txt file for web crawler directives.
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: Robots.txt content
+          schema:
+            type: string
+      summary: Robots.txt
+      tags:
+      - System
+securityDefinitions:
+  BearerAuth:
+    description: JWT bearer token obtained from a successful login. Prefix with "Bearer
+      ".
+    in: header
+    name: Authorization
+    type: apiKey
+  CookieAuth:
+    description: Session cookie set after login. Used by browser-based clients.
+    in: cookie
+    name: _xw_session
+    type: apiKey
+swagger: "2.0"
